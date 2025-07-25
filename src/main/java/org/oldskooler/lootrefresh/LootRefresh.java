@@ -213,23 +213,35 @@ public class LootRefresh implements ModInitializer {
 
     /**
      * Handles when a player opens or interacts with a chest.
+     * Always tracks it if it has a loot table.
+     * If newly tracked, set lastLootedTime in the past so it's eligible for immediate reset.
      */
     private void handleChestInteraction(World world, BlockPos pos, LootableContainerBlockEntity chest) {
         String chestKey = getChestKey(world, pos);
 
         if (chest.getLootTable() != null) {
+            boolean isNew = !trackedChests.containsKey(chestKey);
+
             ChestData data = trackedChests.computeIfAbsent(chestKey, k -> new ChestData());
+
             data.worldName = world.getRegistryKey().getValue().toString();
             data.x = pos.getX();
             data.y = pos.getY();
             data.z = pos.getZ();
             data.lootTableId = chest.getLootTable().getValue().toString();
             data.lootSeed = chest.getLootTableSeed();
-            data.lastLootedTime = System.currentTimeMillis();
             data.isEmpty = chest.isEmpty();
             data.dirty = true;
 
-            LOGGER.debug("Tracking chest at {} with loot table {}", pos, data.lootTableId);
+            if (isNew) {
+                // Set lastLootedTime in the past so it will be eligible for immediate reset
+                data.lastLootedTime = System.currentTimeMillis() - resetTimeMs - 1;
+                LOGGER.debug("New chest tracked at {} (marked as expired)", pos);
+            } else {
+                // Regular update on interaction
+                data.lastLootedTime = System.currentTimeMillis();
+                LOGGER.debug("Existing chest updated at {} (loot time refreshed)", pos);
+            }
         }
     }
 
