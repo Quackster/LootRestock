@@ -27,7 +27,9 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.world.World;
+import net.minecraft.world.chunk.Chunk;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -226,34 +228,33 @@ public class LootRefresh implements ModInitializer {
 		try {
 			Identifier worldId = Identifier.of(data.worldName);
 			ServerWorld world = null;
-	
+
 			for (ServerWorld serverWorld : server.getWorlds()) {
 				if (serverWorld.getRegistryKey().getValue().equals(worldId)) {
 					world = serverWorld;
 					break;
 				}
 			}
-	
+
 			if (world == null) {
 				LOGGER.warn("Could not find world: {}", data.worldName);
 				return false;
 			}
-	
-			int chunkX = data.pos.getX() >> 4;
-			int chunkZ = data.pos.getZ() >> 4;
-	
+
 			// Don't reset if chunk is not loaded
-			if (!world.isChunkLoaded(chunkX, chunkZ)) {
+			if (!world.isChunkLoaded(
+					ChunkSectionPos.getSectionCoord(data.pos.getX()),
+					ChunkSectionPos.getSectionCoord(data.pos.getY()))) {
 				LOGGER.debug("Chunk not loaded for chest at {}. Skipping reset.", data.pos);
 				return false;
 			}
-	
+
 			BlockEntity blockEntity = world.getBlockEntity(data.pos);
 			if (blockEntity instanceof LootableContainerBlockEntity chest) {
 				chest.clear();
 				chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.lootTable), world.getRandom().nextLong());
 				chest.markDirty();
-	
+
 				LOGGER.debug("Reset chest at {} in world {}", data.pos, data.worldName);
 				return true;
 			}
