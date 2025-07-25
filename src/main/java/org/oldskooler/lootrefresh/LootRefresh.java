@@ -11,12 +11,9 @@
  */
 package org.oldskooler.lootrefresh;
 
-import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.block.BarrelBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ChestBlock;
 import net.minecraft.block.entity.BlockEntity;
@@ -25,9 +22,7 @@ import net.minecraft.loot.LootTable;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.WorldSavePath;
@@ -88,7 +83,7 @@ public class LootRefresh implements ModInitializer {
 				BlockPos pos = hitResult.getBlockPos();
 				BlockState state = world.getBlockState(pos);
 
-				if (state.getBlock() instanceof ChestBlock || state.getBlock() instanceof BarrelBlock) {
+				if (state.getBlock() instanceof ChestBlock) {
 					BlockEntity blockEntity = world.getBlockEntity(pos);
 					if (blockEntity instanceof LootableContainerBlockEntity) {
 						handleChestInteraction(world, pos, (LootableContainerBlockEntity) blockEntity);
@@ -186,21 +181,21 @@ public class LootRefresh implements ModInitializer {
 	private void handleChestInteraction(World world, BlockPos pos, LootableContainerBlockEntity chest) {
 		String chestKey = getChestKey(world, pos);
 
-		if (chest.getLootTable() != null) {
+		if (chest.getLootTable() != null/* && !chest.isEmpty()*/) {
 			ChestData data = trackedChests.computeIfAbsent(chestKey, k -> new ChestData());
 			data.worldName = world.getRegistryKey().getValue().toString();
 			data.pos = pos.toImmutable();
 			data.lootTable = chest.getLootTable().getValue();
 			data.lootSeed = chest.getLootTableSeed();
 			data.lastLootedTime = System.currentTimeMillis();
-			data.isEmpty = false;
+			data.isEmpty = chest.isEmpty();
 
 			LOGGER.debug("Tracking chest at {} with loot table {}", pos, data.lootTable);
-		} else if (trackedChests.containsKey(chestKey)) {
+		}/* else if (trackedChests.containsKey(chestKey)) {
 			ChestData data = trackedChests.get(chestKey);
 			data.isEmpty = true;
 			data.lastLootedTime = System.currentTimeMillis();
-		}
+		}*/
 	}
 
 	/**
