@@ -3,7 +3,7 @@
 	"id": "lootrefresh",
 	"version": "1.0.0",
 	"name": "Loot Refresh",
-	"description": "Automatically resets loot chests after 7 days",
+	"description": "A lightweight Fabric mod that automatically resets loot chests after a configurable amount of time has passed.\n\n",
 	"authors": [
 		"Cuntypatra"
 	],
@@ -11,7 +11,7 @@
 		"homepage": "",
 		"sources": ""
 	},
-	"license": "MIT",
+	"license": "GPLv3",
 	"icon": "assets/chestreset/icon.png",
 	"environment": "*",
 	"entrypoints": {
