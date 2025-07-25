@@ -171,7 +171,7 @@ public class LootRefresh implements ModInitializer {
 			ChestData data = trackedChests.computeIfAbsent(chestKey, k -> new ChestData());
 			data.worldName = world.getRegistryKey().getValue().toString();
 			data.pos = pos.toImmutable();
-			data.lootTable = chest.getLootTable();
+			data.lootTable = chest.getLootTable().getValue();
 			data.lootSeed = chest.getLootTableSeed();
 			data.lastLootedTime = System.currentTimeMillis();
 			data.isEmpty = false;
@@ -234,7 +234,7 @@ public class LootRefresh implements ModInitializer {
 			BlockEntity blockEntity = world.getBlockEntity(data.pos);
 			if (blockEntity instanceof LootableContainerBlockEntity chest) {
 				chest.clear();
-				chest.setLootTable(data.lootTable, world.getRandom().nextLong());
+				chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.lootTable), world.getRandom().nextLong());
 				//chest.setLootTable(data.lootTable, data.lootSeed);
 				chest.markDirty();
 
@@ -290,7 +290,7 @@ public class LootRefresh implements ModInitializer {
 
 		String worldName;
 		BlockPos pos;
-		RegistryKey<LootTable> lootTable;
+		Identifier lootTable;
 		long lootSeed;
 		long lastLootedTime;
 		boolean isEmpty;
