@@ -266,7 +266,7 @@ public class LootRefresh implements ModInitializer {
             if (!world.isChunkLoaded(
                     ChunkSectionPos.getSectionCoord(pos.getX()),
                     ChunkSectionPos.getSectionCoord(pos.getZ()))) {
-                LOGGER.info("Chunk not loaded for chest at {}. Skipping reset.", pos);
+                LOGGER.debug("Chunk not loaded for chest at {}. Skipping reset.", pos);
                 continue;
             }
 
