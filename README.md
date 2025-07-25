@@ -1,2 +1,49 @@
 # LootRefresh
-A lightweight Fabric mod that automatically resets loot chests after a configurable amount of time has passed.
+
+## Description
+
+**LootRefresh** is a lightweight Fabric mod that tracks when chests are looted and automatically resets them after a configurable period. This ensures that loot can replenish over time, ideal for persistent servers, custom maps, and adventure-based gameplay.
+
+## Key Features
+
+- Tracks every lootable chest opened by players
+- Resets chest contents based on original loot tables
+- Configurable cooldown period using simple time units (e.g. `7 days`, `12 hours`, `30 minutes`)
+- Persists data across server restarts
+
+## Configuration
+
+LootRefresh generates a simple config file at `./lootrefresh.properties` with two options:
+
+```properties
+reset_time_value=7
+reset_time_unit=days
+```
+
+Available units: `seconds`, `minutes`, `hours`, `days`
+
+## Data Persistence
+
+- Chest interaction data is stored in the world save folder (`chest_reset_data.dat`)
+- Safe to shut down or reload server without losing tracked state
+
+## Use Case Examples
+
+- Keep dungeon loot fresh in multiplayer worlds
+- Refill treasure chests in adventure maps
+- Ensure players always have a reason to explore
+
+## Installation
+
+1. Requires **Fabric Loader**
+2. Install **Fabric API**
+3. Place the mod JAR in your `mods/` folder
+4. Start the game and a default config will be generated
+
+## Metadata
+
+- **Mod ID**: `lootrefresh`
+- **License**: GPL v3
+- **Game Versions**: `1.21+` 
+- **Mod Loaders**: `Fabric`
+- **Dependencies**: `fabric-api`

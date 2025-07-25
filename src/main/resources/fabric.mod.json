@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "lootrefresh",
+	"version": "1.0.0",
+	"name": "Loot Refresh",
+	"description": "Automatically resets loot chests after 7 days",
+	"authors": [
+		"Cuntypatra"
+	],
+	"contact": {
+		"homepage": "",
+		"sources": ""
+	},
+	"license": "MIT",
+	"icon": "assets/chestreset/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"org.oldskooler.lootrefresh.LootRefresh"
+		]
+	},
+	"mixins": [],
+	"depends": {
+		"fabricloader": ">=0.16.0",
+		"fabric": "*",
+		"minecraft": "~1.21"
+	},
+	"suggests": {
+		"another-mod": "*"
+	}
+}
