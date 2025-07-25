@@ -1,22 +1,13 @@
 /**
  * LootRefresh is a Fabric mod that tracks and resets lootable chests
- * after a configurable amount of time has passed since they were last looted.
- *
- * <p>Chest tracking data is persisted using only basic Java data types
- * (e.g., strings, integers, booleans) to ensure compatibility and stability
- * across different Minecraft versions. Complex Minecraft classes such as
- * {@code BlockPos}, {@code Identifier}, or {@code BlockEntity} are not
- * serialized directly.
- *
- * <p>Configuration:
+ * after a configurable amount of time has passed since last looted.
+ * <p>
+ * Configuration:
  * <ul>
  *   <li><b>reset_time_value</b>: Number (e.g., 7)</li>
  *   <li><b>reset_time_unit</b>: Time unit (seconds, minutes, hours, days)</li>
- *   <li><b>only_reset_when_empty</b>: Whether to reset only empty containers</li>
- *   <li><b>include_barrels</b>: Whether to track barrels as well as chests</li>
  * </ul>
- *
- * <p>The config file is located at: <code>lootrefresh.properties</code>
+ * The config file is located at: lootrefresh.properties
  */
 package org.oldskooler.lootrefresh;
 
@@ -303,9 +294,10 @@ public class LootRefresh implements ModInitializer {
             if (blockEntity instanceof LootableContainerBlockEntity chest) {
                 chest.clear();
                 chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.getLootTableIdentifier()), world.getRandom().nextLong());
+                chest.generateLoot(null);
                 chest.markDirty();
 
-                LOGGER.debug("Reset chest at {} in world {}", pos, data.worldName);
+                LOGGER.info("Reset chest at {} in world {}", pos, data.worldName);
                 return true;
             }
         } catch (Exception e) {
