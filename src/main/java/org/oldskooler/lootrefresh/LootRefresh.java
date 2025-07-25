@@ -1,13 +1,25 @@
 /**
  * LootRefresh is a Fabric mod that tracks and resets lootable chests
  * after a configurable amount of time has passed since last looted.
- * <p>
+ *
+ * Features:
+ * <ul>
+ *   <li>Tracks interactions with chests (and optionally barrels) that use loot tables</li>
+ *   <li>Automatically resets their loot after a configurable cooldown</li>
+ *   <li>Optionally only resets when the chest is empty</li>
+ *   <li>Removes chests from tracking if the world is deleted or the block is no longer a lootable container</li>
+ * </ul>
+ *
  * Configuration:
  * <ul>
  *   <li><b>reset_time_value</b>: Number (e.g., 7)</li>
  *   <li><b>reset_time_unit</b>: Time unit (seconds, minutes, hours, days)</li>
+ *   <li><b>only_reset_when_empty</b>: true/false (default: true)</li>
+ *   <li><b>include_barrels</b>: true/false (default: false)</li>
  * </ul>
- * The config file is located at: lootrefresh.properties
+ *
+ * The config file is located at: {@code lootrefresh.properties}
+ * Tracked data is saved to: {@code chest_reset_data.dat}
  */
 package org.oldskooler.lootrefresh;
 
@@ -38,6 +50,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executors;
@@ -220,21 +233,47 @@ public class LootRefresh implements ModInitializer {
         int resetCount = 0;
         boolean needsSave = false;
 
-        for (Map.Entry<String, ChestData> entry : trackedChests.entrySet()) {
-            ChestData data = entry.getValue();
+        Iterator<Map.Entry<String, ChestData>> iterator = trackedChests.entrySet().iterator();
 
-            // Reset logic
-            if ((!onlyResetWhenEmpty || data.isEmpty) &&
+        while (iterator.hasNext()) {
+            Map.Entry<String, ChestData> entry = iterator.next();
+            ChestData data = entry.getValue();
+            BlockPos pos = data.getBlockPos();
+            ServerWorld world = data.getWorld(server);
+
+            if (world == null) {
+                LOGGER.debug("Removing chest from tracking: world '{}' no longer exists", data.worldName);
+                iterator.remove();
+                needsSave = true;
+                continue;
+            }
+
+            if (!world.isChunkLoaded(
+                    ChunkSectionPos.getSectionCoord(pos.getX()),
+                    ChunkSectionPos.getSectionCoord(pos.getZ()))) {
+                LOGGER.debug("Chunk not loaded for chest at {}. Skipping reset.", pos);
+                continue;
+            }
+
+            BlockEntity blockEntity = world.getBlockEntity(pos);
+
+            if (!(blockEntity instanceof LootableContainerBlockEntity chest)) {
+                LOGGER.debug("Removing chest from tracking: block at {} is no longer a lootable container", pos);
+                iterator.remove();
+                needsSave = true;
+                continue;
+            }
+
+            if ((!onlyResetWhenEmpty || chest.isEmpty()) &&
                     (currentTime - data.lastLootedTime) >= resetTimeMs) {
                 if (resetChest(data)) {
                     resetCount++;
                     data.isEmpty = false;
                     data.lastLootedTime = currentTime;
-                    data.dirty = true;
+                    data.dirty = chest.isEmpty();
                 }
             }
 
-            // Check if we need to save due to new/modified data
             if (data.dirty) {
                 needsSave = true;
             }
@@ -242,7 +281,6 @@ public class LootRefresh implements ModInitializer {
 
         if (needsSave) {
             saveChestData();
-            // Clear dirty flags
             for (ChestData data : trackedChests.values()) {
                 data.dirty = false;
             }
@@ -252,6 +290,7 @@ public class LootRefresh implements ModInitializer {
             LOGGER.info("Reset {} chests", resetCount);
         }
     }
+
 
     /**
      * Attempts to reset the contents of a chest using its stored loot table,
@@ -266,15 +305,7 @@ public class LootRefresh implements ModInitializer {
      */
     private boolean resetChest(ChestData data) {
         try {
-            Identifier worldId = Identifier.of(data.worldName);
-            ServerWorld world = null;
-
-            for (ServerWorld serverWorld : server.getWorlds()) {
-                if (serverWorld.getRegistryKey().getValue().equals(worldId)) {
-                    world = serverWorld;
-                    break;
-                }
-            }
+            ServerWorld world = data.getWorld(server);
 
             if (world == null) {
                 LOGGER.warn("Could not find world: {}", data.worldName);
@@ -282,15 +313,8 @@ public class LootRefresh implements ModInitializer {
             }
 
             BlockPos pos = data.getBlockPos();
-
-            if (!world.isChunkLoaded(
-                    ChunkSectionPos.getSectionCoord(pos.getX()),
-                    ChunkSectionPos.getSectionCoord(pos.getY()))) {
-                LOGGER.debug("Chunk not loaded for chest at {}. Skipping reset.", pos);
-                return false;
-            }
-
             BlockEntity blockEntity = world.getBlockEntity(pos);
+
             if (blockEntity instanceof LootableContainerBlockEntity chest) {
                 chest.clear();
                 chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.getLootTableIdentifier()), world.getRandom().nextLong());
@@ -363,6 +387,19 @@ public class LootRefresh implements ModInitializer {
 
         public Identifier getLootTableIdentifier() {
             return Identifier.of(lootTableId);
+        }
+
+        public ServerWorld getWorld(MinecraftServer server) {
+            Identifier worldId = Identifier.of(worldName);
+            ServerWorld world = null;
+
+            for (ServerWorld serverWorld : server.getWorlds()) {
+                if (serverWorld.getRegistryKey().getValue().equals(worldId)) {
+                    return serverWorld;
+                }
+            }
+
+            return null;
         }
     }
 }
