@@ -65,7 +65,7 @@ public class LootRefresh implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		LOGGER.info("Initializing Loot Refresh");
+		LOGGER.info("Initializing Loot Refresh mod");
 
 		loadConfig();
 
@@ -148,7 +148,7 @@ public class LootRefresh implements ModInitializer {
 		this.server = server;
 		this.dataFile = server.getSavePath(WorldSavePath.ROOT).resolve("chest_reset_data.dat");
 		loadChestData();
-		LOGGER.info("Chest Reset Mod loaded {} tracked chests", trackedChests.size());
+		LOGGER.info("LootRefresh mod loaded {} tracked chests", trackedChests.size());
 	}
 
 	/**
