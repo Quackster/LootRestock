@@ -7,9 +7,15 @@
 ## Key Features
 
 - Tracks every lootable chest opened by players
-- Resets chest contents based on original loot tables
+- Resets chest contents based on original loot tables only when chunks are loaded
+- **Performance-optimized**: Chest resets are processed only when players are nearby and chunks are active
 - Configurable cooldown period using simple time units (e.g. `7 days`, `12 hours`, `30 minutes`)
 - Persists data across server restarts
+
+## Performance Design
+LootRefresh is designed with server performance in mind:
+- Chest resets only occur when the containing chunk is loaded by a player
+- Minimal memory footprint by only tracking opened chests
 
 ## Configuration
 
