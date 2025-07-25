@@ -11,6 +11,7 @@
 - **Performance-optimized**: Chest resets are processed only when players are nearby and chunks are active
 - Configurable cooldown period using simple time units (e.g. `7 days`, `12 hours`, `30 minutes`)
 - Persists data across server restarts
+- Optionally reset only when chests are empty (or always) after timeout expires
 
 ## Performance Design
 LootRefresh is designed with server performance in mind:
@@ -19,14 +20,19 @@ LootRefresh is designed with server performance in mind:
 
 ## Configuration
 
-LootRefresh generates a simple config file at `./lootrefresh.properties` with two options:
+LootRefresh generates a simple config file at `./lootrefresh.properties` with the following options:
 
 ```properties
 reset_time_value=7
 reset_time_unit=days
+only_reset_when_empty=true
 ```
 
-Available units: `seconds`, `minutes`, `hours`, `days`
+- `reset_time_value`: Number of time units before a chest is eligible for reset
+- `reset_time_unit: Units of time`: `seconds`, `minutes`, `hours`, or `days`
+- `only_reset_when_empty`: (default value: `true`)
+  - `true`: Chests will reset only if empty (after the cooldown)
+  - `false`: Chests will reset regardless of contents (after the cooldown)
 
 ## Data Persistence
 
