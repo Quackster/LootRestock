@@ -194,22 +194,20 @@ public class LootRefresh implements ModInitializer {
     private void handleChestInteraction(World world, BlockPos pos, LootableContainerBlockEntity chest) {
         String chestKey = getChestKey(world, pos);
 
-        if (chest.getLootTable() != null/* && !chest.isEmpty()*/) {
+        if (chest.getLootTable() != null) {
             ChestData data = trackedChests.computeIfAbsent(chestKey, k -> new ChestData());
             data.worldName = world.getRegistryKey().getValue().toString();
-            data.pos = pos.toImmutable();
-            data.lootTable = chest.getLootTable().getValue();
+            data.x = pos.getX();
+            data.y = pos.getY();
+            data.z = pos.getZ();
+            data.lootTableId = chest.getLootTable().getValue().toString();
             data.lootSeed = chest.getLootTableSeed();
             data.lastLootedTime = System.currentTimeMillis();
             data.isEmpty = chest.isEmpty();
             data.dirty = true;
 
-            LOGGER.debug("Tracking chest at {} with loot table {}", pos, data.lootTable);
-        }/* else if (trackedChests.containsKey(chestKey)) {
-            ChestData data = trackedChests.get(chestKey);
-            data.isEmpty = true;
-            data.lastLootedTime = System.currentTimeMillis();
-        }*/
+            LOGGER.debug("Tracking chest at {} with loot table {}", pos, data.lootTableId);
+        }
     }
 
     /**
@@ -283,29 +281,29 @@ public class LootRefresh implements ModInitializer {
                 return false;
             }
 
-            // Don't reset if chunk is not loaded
+            BlockPos pos = data.getBlockPos();
+
             if (!world.isChunkLoaded(
-                    ChunkSectionPos.getSectionCoord(data.pos.getX()),
-                    ChunkSectionPos.getSectionCoord(data.pos.getY()))) {
-                LOGGER.debug("Chunk not loaded for chest at {}. Skipping reset.", data.pos);
+                    ChunkSectionPos.getSectionCoord(pos.getX()),
+                    ChunkSectionPos.getSectionCoord(pos.getY()))) {
+                LOGGER.debug("Chunk not loaded for chest at {}. Skipping reset.", pos);
                 return false;
             }
 
-            BlockEntity blockEntity = world.getBlockEntity(data.pos);
+            BlockEntity blockEntity = world.getBlockEntity(pos);
             if (blockEntity instanceof LootableContainerBlockEntity chest) {
                 chest.clear();
-                chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.lootTable), world.getRandom().nextLong());
+                chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.getLootTableIdentifier()), world.getRandom().nextLong());
                 chest.markDirty();
 
-                LOGGER.debug("Reset chest at {} in world {}", data.pos, data.worldName);
+                LOGGER.debug("Reset chest at {} in world {}", pos, data.worldName);
                 return true;
             }
         } catch (Exception e) {
-            LOGGER.error("Failed to reset chest at {}: {}", data.pos, e.getMessage());
+            LOGGER.error("Failed to reset chest: {}", e.getMessage());
         }
         return false;
     }
-
 
     /**
      * Creates a unique key for a chest in the world.
@@ -349,13 +347,21 @@ public class LootRefresh implements ModInitializer {
         private static final long serialVersionUID = 1L;
 
         String worldName;
-        BlockPos pos;
-        Identifier lootTable;
+        int x, y, z; // Replaces BlockPos
+        String lootTableId; // Replaces Identifier
         long lootSeed;
         long lastLootedTime;
         boolean isEmpty;
 
-        // Transient means this field won't be serialized
         transient boolean dirty = false;
+
+        // Helper methods to get back full objects from stored data
+        public BlockPos getBlockPos() {
+            return new BlockPos(x, y, z);
+        }
+
+        public Identifier getLootTableIdentifier() {
+            return Identifier.of(lootTableId);
+        }
     }
 }
