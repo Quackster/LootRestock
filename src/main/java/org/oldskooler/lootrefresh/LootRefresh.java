@@ -212,32 +212,48 @@ public class LootRefresh implements ModInitializer {
 	}
 
 	/**
-	 * Resets the contents of a chest using its stored loot table.
+	 * Attempts to reset the contents of a chest using its stored loot table,
+	 * but only if the chest is located in a currently loaded chunk.
+	 * <p>
+	 * This method checks the chest's world and chunk status before accessing
+	 * the block entity. If the chunk is not loaded, the reset is skipped to avoid
+	 * unnecessary chunk loading and potential performance issues.
+	 *
+	 * @param data The tracked chest data containing world, position, and loot info.
+	 * @return {@code true} if the chest was successfully reset; {@code false} otherwise.
 	 */
 	private boolean resetChest(ChestData data) {
 		try {
 			Identifier worldId = Identifier.of(data.worldName);
 			ServerWorld world = null;
-
+	
 			for (ServerWorld serverWorld : server.getWorlds()) {
 				if (serverWorld.getRegistryKey().getValue().equals(worldId)) {
 					world = serverWorld;
 					break;
 				}
 			}
-
+	
 			if (world == null) {
 				LOGGER.warn("Could not find world: {}", data.worldName);
 				return false;
 			}
-
+	
+			int chunkX = data.pos.getX() >> 4;
+			int chunkZ = data.pos.getZ() >> 4;
+	
+			// Don't reset if chunk is not loaded
+			if (!world.isChunkLoaded(chunkX, chunkZ)) {
+				LOGGER.debug("Chunk not loaded for chest at {}. Skipping reset.", data.pos);
+				return false;
+			}
+	
 			BlockEntity blockEntity = world.getBlockEntity(data.pos);
 			if (blockEntity instanceof LootableContainerBlockEntity chest) {
 				chest.clear();
 				chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.lootTable), world.getRandom().nextLong());
-				//chest.setLootTable(data.lootTable, data.lootSeed);
 				chest.markDirty();
-
+	
 				LOGGER.debug("Reset chest at {} in world {}", data.pos, data.worldName);
 				return true;
 			}
@@ -246,6 +262,7 @@ public class LootRefresh implements ModInitializer {
 		}
 		return false;
 	}
+
 
 	/**
 	 * Creates a unique key for a chest in the world.
