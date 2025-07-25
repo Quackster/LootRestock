@@ -75,6 +75,7 @@ public class LootRefresh implements ModInitializer {
     private static final String DEFAULT_RESET_TIME_UNIT = "days";
     private static final boolean DEFAULT_ONLY_RESET_WHEN_EMPTY = true;
     private static final boolean DEFAULT_INCLUDE_BARRELS = false;
+    private static final boolean DEBUG_CHEST_LOOT = true;
 
     private boolean includeBarrels = DEFAULT_INCLUDE_BARRELS;
     private boolean onlyResetWhenEmpty = DEFAULT_ONLY_RESET_WHEN_EMPTY;
@@ -167,16 +168,25 @@ public class LootRefresh implements ModInitializer {
         }
 
         // Convert time to milliseconds
-        resetTimeMs = switch (timeUnit) {
-            case "seconds" -> timeValue * 1000L;
-            case "minutes" -> timeValue * 60 * 1000L;
-            case "hours"   -> timeValue * 60 * 60 * 1000L;
-            case "days"    -> timeValue * 24 * 60 * 60 * 1000L;
-            default -> {
+        switch (timeUnit) {
+            case "seconds":
+                resetTimeMs = timeValue * 1000L;
+                break;
+            case "minutes":
+                resetTimeMs = timeValue * 60 * 1000L;
+                break;
+            case "hours":
+                resetTimeMs = timeValue * 60 * 60 * 1000L;
+                break;
+            case "days":
+                resetTimeMs = timeValue * 24 * 60 * 60 * 1000L;
+                break;
+            default:
+                timeUnit = "days";
                 LOGGER.warn("Unrecognized time unit '{}'. Defaulting to days.", timeUnit);
-                yield timeValue * 24 * 60 * 60 * 1000L;
-            }
-        };
+                resetTimeMs = timeValue * 24 * 60 * 60 * 1000L;
+                break;
+        }
 
         LOGGER.info("Chest reset time set to {} {} ({} ms)", timeValue, timeUnit, resetTimeMs);
     }
@@ -242,7 +252,7 @@ public class LootRefresh implements ModInitializer {
             ServerWorld world = data.getWorld(server);
 
             if (world == null) {
-                LOGGER.debug("Removing chest from tracking: world '{}' no longer exists", data.worldName);
+                LOGGER.info("Removing chest from tracking: world '{}' no longer exists", data.worldName);
                 iterator.remove();
                 needsSave = true;
                 continue;
@@ -251,14 +261,14 @@ public class LootRefresh implements ModInitializer {
             if (!world.isChunkLoaded(
                     ChunkSectionPos.getSectionCoord(pos.getX()),
                     ChunkSectionPos.getSectionCoord(pos.getZ()))) {
-                LOGGER.debug("Chunk not loaded for chest at {}. Skipping reset.", pos);
+                LOGGER.info("Chunk not loaded for chest at {}. Skipping reset.", pos);
                 continue;
             }
 
             BlockEntity blockEntity = world.getBlockEntity(pos);
 
             if (!(blockEntity instanceof LootableContainerBlockEntity chest)) {
-                LOGGER.debug("Removing chest from tracking: block at {} is no longer a lootable container", pos);
+                LOGGER.info("Removing chest from tracking: block at {} is no longer a lootable container", pos);
                 iterator.remove();
                 needsSave = true;
                 continue;
@@ -266,13 +276,25 @@ public class LootRefresh implements ModInitializer {
 
             if ((!onlyResetWhenEmpty || chest.isEmpty()) &&
                     (currentTime - data.lastLootedTime) >= resetTimeMs) {
+
                 if (resetChest(data)) {
                     resetCount++;
-                    data.isEmpty = false;
+                    data.isEmpty = chest.isEmpty();
                     data.lastLootedTime = currentTime;
-                    data.dirty = chest.isEmpty();
+                    data.dirty = true;
+                }
+
+            } else {
+                if (DEBUG_CHEST_LOOT) {
+                    if (onlyResetWhenEmpty && !chest.isEmpty()) {
+                        LOGGER.info("Debug: Condition failed - chest is not empty while onlyResetWhenEmpty is true");
+                    }
+                    if ((currentTime - data.lastLootedTime) < resetTimeMs) {
+                        LOGGER.info("Debug: Condition failed - not enough time has passed since last looted");
+                    }
                 }
             }
+
 
             if (data.dirty) {
                 needsSave = true;
