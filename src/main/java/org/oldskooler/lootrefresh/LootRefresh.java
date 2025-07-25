@@ -234,7 +234,8 @@ public class LootRefresh implements ModInitializer {
 			BlockEntity blockEntity = world.getBlockEntity(data.pos);
 			if (blockEntity instanceof LootableContainerBlockEntity chest) {
 				chest.clear();
-				chest.setLootTable(data.lootTable, data.lootSeed);
+				chest.setLootTable(data.lootTable, world.getRandom().nextLong());
+				//chest.setLootTable(data.lootTable, data.lootSeed);
 				chest.markDirty();
 
 				LOGGER.debug("Reset chest at {} in world {}", data.pos, data.worldName);
