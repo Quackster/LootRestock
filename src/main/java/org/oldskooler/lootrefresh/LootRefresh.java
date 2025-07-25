@@ -120,6 +120,10 @@ public class LootRefresh implements ModInitializer {
 					onlyResetWhenEmpty = Boolean.parseBoolean(
 							config.getProperty(CONFIG_ONLY_RESET_WHEN_EMPTY_KEY, String.valueOf(DEFAULT_ONLY_RESET_WHEN_EMPTY))
 					);
+
+					if (timeValue <= 0) {
+						throw new IllegalArgumentException(CONFIG_TIME_VALUE_KEY + " must be greater than 0");
+					}
 				}
 			} else {
 				config.setProperty(CONFIG_TIME_VALUE_KEY, String.valueOf(DEFAULT_RESET_TIME_VALUE));
