@@ -26,9 +26,11 @@ LootRefresh generates a simple config file at `./lootrefresh.properties` with th
 reset_time_value=7
 reset_time_unit=days
 only_reset_when_empty=true
+include_barrels=false
 ```
 
 - `reset_time_value`: Number of time units before a chest is eligible for reset
+- `include_barrels`: Whether barrel loot should get reset (default value: `false`)
 - `reset_time_unit: Units of time`: `seconds`, `minutes`, `hours`, or `days`
 - `only_reset_when_empty`: (default value: `true`)
   - `true`: Chests will reset only if empty (after the cooldown)
