@@ -30,11 +30,13 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ChestBlock;
 import net.minecraft.block.BarrelBlock;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.LootableContainerBlockEntity;
+import net.minecraft.entity.vehicle.ChestMinecartEntity;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
@@ -42,7 +44,9 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.WorldSavePath;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.world.World;
 import org.slf4j.Logger;
@@ -51,10 +55,7 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * The main mod initializer for LootRestock.
@@ -94,7 +95,7 @@ public class LootRestock implements ModInitializer {
 
         // Register block interaction callback
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            if (!world.isClient() && hitResult.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
+            if (!world.isClient() && hitResult.getType() == HitResult.Type.BLOCK) {
                 BlockPos pos = hitResult.getBlockPos();
                 BlockState state = world.getBlockState(pos);
 
@@ -104,6 +105,14 @@ public class LootRestock implements ModInitializer {
                         handleChestInteraction(world, pos, (LootableContainerBlockEntity) blockEntity);
                     }
                 }
+            }
+
+            return ActionResult.PASS;
+        });
+
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            if (!world.isClient() && entity instanceof ChestMinecartEntity chestMinecart) {
+                handleMinecartChestInteraction(world, chestMinecart);
             }
             return ActionResult.PASS;
         });
@@ -213,8 +222,12 @@ public class LootRestock implements ModInitializer {
     }
 
     /**
-     * Handles when a player opens or interacts with a chest.
-     * Always tracks it if it has a loot table.
+     * Handles interaction with a block-based chest (e.g., normal chest or barrel).
+     * If the block has a loot table, it is added to the tracking map, and its state is recorded.
+     *
+     * @param world the world the chest is in
+     * @param pos the block position of the chest
+     * @param chest the LootableContainerBlockEntity being interacted with
      */
     private void handleChestInteraction(World world, BlockPos pos, LootableContainerBlockEntity chest) {
         String chestKey = getChestKey(world, pos);
@@ -237,7 +250,43 @@ public class LootRestock implements ModInitializer {
     }
 
     /**
-     * Checks all tracked chests and resets ones that have passed the cooldown period.
+     * Handles interaction with a Chest Minecart entity.
+     * <p>
+     * If the entity has a loot table, it is added to the tracked chest map
+     * and its current state is recorded. The reset timer starts from the time
+     * of interaction.
+     *
+     * @param world the world the chest minecart is in
+     * @param chest the ChestMinecartEntity being interacted with
+     */
+    private void handleMinecartChestInteraction(World world, ChestMinecartEntity chest) {
+        String chestKey = world.getRegistryKey().getValue() + ":entity:" + chest.getUuidAsString();
+
+        if (chest.getLootTable() != null) {
+            ChestData data = trackedChests.computeIfAbsent(chestKey, k -> {
+                ChestData newData = new ChestData();
+                newData.lastLootedTime = System.currentTimeMillis();
+                return newData;
+            });
+
+            data.worldName = world.getRegistryKey().getValue().toString();
+            data.entityUuid = chest.getUuidAsString();
+            data.lootTableId = chest.getLootTable().getValue().toString();
+            data.lootSeed = chest.getLootTableSeed();
+            data.x = chest.getBlockPos().getX();
+            data.y = chest.getBlockPos().getY();
+            data.z = chest.getBlockPos().getZ();
+            data.isEmpty = chest.isEmpty();
+            data.dirty = true;
+        }
+    }
+
+    /**
+     * Iterates through all tracked chests and resets those whose cooldown period has elapsed.
+     * <p>
+     * Supports both block-based and entity-based chests. Only chests that are empty
+     * (if configured) and have been inactive longer than the reset interval are reset.
+     * Invalid or missing chests are automatically removed from tracking.
      */
     private void checkAndResetChests() {
         if (server == null) return;
@@ -268,25 +317,43 @@ public class LootRestock implements ModInitializer {
                 continue;
             }
 
-            BlockEntity blockEntity = world.getBlockEntity(pos);
-
-            if (!(blockEntity instanceof LootableContainerBlockEntity chest)) {
-                LOGGER.info("Removing chest from tracking: block at {} is no longer a lootable container", pos);
-                iterator.remove();
-                needsSave = true;
-                continue;
-            }
-
-            if ((!onlyResetWhenEmpty || chest.isEmpty()) &&
-                    (currentTime - data.lastLootedTime) >= resetTimeMs) {
-
-                if (resetChest(data)) {
-                    resetCount++;
-                    data.isEmpty = chest.isEmpty();
-                    data.lastLootedTime = currentTime;
-                    data.dirty = true;
+            if (data.isEntityChest()) {
+                ChestMinecartEntity entity = getMinecartChestByUuid(world, data.entityUuid, data.getBlockPos());
+                if (entity == null) {
+                    LOGGER.info("Removing tracked entity chest: not found {}", data.entityUuid);
+                    iterator.remove();
+                    needsSave = true;
+                    continue;
                 }
 
+                if ((!onlyResetWhenEmpty || entity.isEmpty()) &&
+                        (currentTime - data.lastLootedTime) >= resetTimeMs) {
+                    if (resetChestEntity(entity, data)) {
+                        resetCount++;
+                        data.isEmpty = entity.isEmpty();
+                        data.lastLootedTime = currentTime;
+                        data.dirty = true;
+                    }
+                }
+
+            } else {
+                BlockEntity blockEntity = world.getBlockEntity(pos);
+                if (!(blockEntity instanceof LootableContainerBlockEntity chest)) {
+                    LOGGER.info("Removing chest from tracking: block at {} is no longer a lootable container", pos);
+                    iterator.remove();
+                    needsSave = true;
+                    continue;
+                }
+
+                if ((!onlyResetWhenEmpty || chest.isEmpty()) &&
+                        (currentTime - data.lastLootedTime) >= resetTimeMs) {
+                    if (resetChest(data)) {
+                        resetCount++;
+                        data.isEmpty = chest.isEmpty();
+                        data.lastLootedTime = currentTime;
+                        data.dirty = true;
+                    }
+                }
             }
 
             if (data.dirty) {
@@ -306,6 +373,51 @@ public class LootRestock implements ModInitializer {
         }
     }
 
+    /**
+     * Attempts to locate a ChestMinecartEntity in the given world by its UUID.
+     * Searches within a bounding box around the given block position to limit the area.
+     *
+     * @param world the server world to search in
+     * @param uuidStr the UUID string of the chest minecart to find
+     * @param pos the position around which to search
+     * @return the matching ChestMinecartEntity, or {@code null} if not found or UUID is invalid
+     */
+
+    private ChestMinecartEntity getMinecartChestByUuid(ServerWorld world, String uuidStr, BlockPos pos) {
+        try {
+            int distanceMax = 2;
+            Box myBox = new Box(pos).expand(distanceMax);
+
+            UUID uuid = UUID.fromString(uuidStr);
+            return world.getEntitiesByClass(ChestMinecartEntity.class, myBox, entity -> entity.getUuid().equals(uuid))
+                    .stream().findFirst().orElse(null);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Resets the contents of a chest minecart using its stored loot table.
+     * This clears its inventory and regenerates loot with a new random seed.
+     *
+     * @param chest the ChestMinecartEntity to reset
+     * @param data the stored chest data, including loot table info
+     * @return {@code true} if the chest was successfully reset, {@code false} otherwise
+     */
+    private boolean resetChestEntity(ChestMinecartEntity chest, ChestData data) {
+        try {
+            chest.clear();
+            chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.getLootTableIdentifier()), chest.getWorld().getRandom().nextLong());
+            chest.generateInventoryLoot(null);
+            chest.markDirty();
+
+            LOGGER.info("Reset chest minecart at {} in world {}", chest.getBlockPos(), data.worldName);
+            return true;
+        } catch (Exception e) {
+            LOGGER.error("Failed to reset chest minecart: {}", e.getMessage());
+            return false;
+        }
+    }
 
     /**
      * Attempts to reset the contents of a chest using its stored loot table,
@@ -388,19 +500,21 @@ public class LootRestock implements ModInitializer {
     /**
      * Serializable class for tracking chest state.
      */
-    private static class ChestData implements Serializable {
-        private static final long serialVersionUID = 1L;
-
+    private static class ChestData {
+        // Block-based chest fields
         String worldName;
-        int x, y, z; // Replaces BlockPos
-        String lootTableId; // Replaces Identifier
+        int x, y, z;
+
+        // Entity-based chest fields
+        String entityUuid; // Add this field for minecart chests
+
+        String lootTableId;
         long lootSeed;
         long lastLootedTime;
         boolean isEmpty;
 
         transient boolean dirty = false;
 
-        // Helper methods to get back full objects from stored data
         public BlockPos getBlockPos() {
             return new BlockPos(x, y, z);
         }
@@ -411,15 +525,17 @@ public class LootRestock implements ModInitializer {
 
         public ServerWorld getWorld(MinecraftServer server) {
             Identifier worldId = Identifier.of(worldName);
-            ServerWorld world = null;
-
             for (ServerWorld serverWorld : server.getWorlds()) {
                 if (serverWorld.getRegistryKey().getValue().equals(worldId)) {
                     return serverWorld;
                 }
             }
-
             return null;
         }
+
+        public boolean isEntityChest() {
+            return entityUuid != null;
+        }
     }
+
 }
