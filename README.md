@@ -38,7 +38,7 @@ include_barrels=false
 
 ## Data Persistence
 
-- Chest interaction data is stored in the world save folder (`chest_reset_data.dat`)
+- Chest interaction data is stored in the world save folder (`chest_reset_data.json`)
 - Safe to shut down or reload server without losing tracked state
 
 ## Use Case Examples
