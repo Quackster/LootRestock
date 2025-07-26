@@ -1,8 +1,8 @@
 {
 	"schemaVersion": 1,
-	"id": "lootrefresh",
+	"id": "lootrestock",
 	"version": "1.0.0",
-	"name": "Loot Refresh",
+	"name": "Loot Restock",
 	"description": "A lightweight Fabric mod that automatically resets loot chests after a configurable amount of time has passed.\n\n",
 	"authors": [
 		"Cuntypatra"
@@ -12,11 +12,11 @@
 		"sources": ""
 	},
 	"license": "GPLv3",
-	"icon": "assets/chestreset/icon.png",
+	"icon": "assets/lootrestock/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"org.oldskooler.lootrefresh.LootRefresh"
+			"org.oldskooler.lootrestock.LootRestock"
 		]
 	},
 	"mixins": [],

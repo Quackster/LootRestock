@@ -1,5 +1,5 @@
 /**
- * LootRefresh is a Fabric mod that tracks and resets lootable chests
+ * LootRestock is a Fabric mod that tracks and resets lootable chests
  * after a configurable amount of time has passed since last looted.
  *
  * Features:
@@ -18,10 +18,10 @@
  *   <li><b>include_barrels</b>: true/false (default: false)</li>
  * </ul>
  *
- * The config file is located at: {@code lootrefresh.properties}
+ * The config file is located at: {@code lootrestock.properties}
  * Tracked data is saved to: {@code chest_reset_data.dat}
  */
-package org.oldskooler.lootrefresh;
+package org.oldskooler.lootrestock;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -35,7 +35,6 @@ import net.minecraft.block.ChestBlock;
 import net.minecraft.block.BarrelBlock;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.LootableContainerBlockEntity;
-import net.minecraft.loot.LootTable;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
@@ -46,7 +45,6 @@ import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.world.World;
-import net.minecraft.world.chunk.Chunk;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,19 +55,16 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
- * The main mod initializer for LootRefresh.
+ * The main mod initializer for LootRestock.
  * Tracks chests that are looted and resets them after a configurable number of days.
  */
-public class LootRefresh implements ModInitializer {
-    public static final String MOD_ID = "lootrefresh";
+public class LootRestock implements ModInitializer {
+    public static final String MOD_ID = "lootrestock";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    private static final String CONFIG_FILE_NAME = "lootrefresh.properties";
+    private static final String CONFIG_FILE_NAME = "lootrestock.properties";
     private static final String CONFIG_TIME_VALUE_KEY = "reset_time_value";
     private static final String CONFIG_TIME_UNIT_KEY = "reset_time_unit";
     private static final String CONFIG_ONLY_RESET_WHEN_EMPTY_KEY = "only_reset_when_empty";
@@ -93,7 +88,7 @@ public class LootRefresh implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("Initializing Loot Refresh mod");
+        LOGGER.info("Initializing LootRestock");
 
         loadConfig();
 
@@ -166,7 +161,7 @@ public class LootRefresh implements ModInitializer {
                 config.setProperty(CONFIG_INCLUDE_BARRELS_KEY, String.valueOf(DEFAULT_INCLUDE_BARRELS));
                 Files.createFile(configPath);
                 try (OutputStream out = Files.newOutputStream(configPath)) {
-                    config.store(out, "LootRefresh Configuration");
+                    config.store(out, "LootRestock Configuration");
                 }
             }
         } catch (IOException | NumberFormatException e) {
@@ -206,7 +201,7 @@ public class LootRefresh implements ModInitializer {
         this.server = server;
         this.dataFile = server.getSavePath(WorldSavePath.ROOT).resolve("chest_reset_data.json");
         loadChestData();
-        LOGGER.info("LootRefresh mod loaded {} tracked chests", trackedChests.size());
+        LOGGER.info("LootRestock mod loaded {} tracked chests", trackedChests.size());
     }
 
     /**

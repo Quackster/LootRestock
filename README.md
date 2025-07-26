@@ -1,8 +1,8 @@
-# LootRefresh
+# LootRestock
 
 ## Description
 
-**LootRefresh** is a lightweight Fabric mod that tracks when chests are looted and automatically resets them after a configurable period. This ensures that loot can replenish over time, ideal for persistent servers, custom maps, and adventure-based gameplay.
+**LootRestock** is a lightweight Fabric mod that tracks when chests are looted and automatically resets them after a configurable period. This ensures that loot can replenish over time, ideal for persistent servers, custom maps, and adventure-based gameplay.
 
 ## Key Features
 
@@ -14,13 +14,13 @@
 - Optionally reset only when chests are empty (or always) after timeout expires
 
 ## Performance Design
-LootRefresh is designed with server performance in mind:
+LootRestock is designed with server performance in mind:
 - Chest resets only occur when the containing chunk is loaded by a player
 - Minimal memory footprint by only tracking opened chests
 
 ## Configuration
 
-LootRefresh generates a simple config file at `./lootrefresh.properties` with the following options:
+LootRestock generates a simple config file at `./lootrestock.properties` with the following options:
 
 ```properties
 reset_time_value=7
@@ -56,7 +56,7 @@ include_barrels=false
 
 ## Metadata
 
-- **Mod ID**: `lootrefresh`
+- **Mod ID**: `lootrestock`
 - **License**: GPL v3
 - **Game Versions**: `1.21+` 
 - **Mod Loaders**: `Fabric`
