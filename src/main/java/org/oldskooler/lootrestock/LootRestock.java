@@ -19,7 +19,7 @@
  * </ul>
  *
  * The config file is located at: {@code lootrestock.properties}
- * Tracked data is saved to: {@code chest_reset_data.dat}
+ * Tracked data is saved to: {@code chest_reset_data.json}
  */
 package org.oldskooler.lootrestock;
 
@@ -215,13 +215,16 @@ public class LootRestock implements ModInitializer {
     /**
      * Handles when a player opens or interacts with a chest.
      * Always tracks it if it has a loot table.
-     * If newly tracked, set lastLootedTime in the past so it's eligible for immediate reset.
      */
     private void handleChestInteraction(World world, BlockPos pos, LootableContainerBlockEntity chest) {
         String chestKey = getChestKey(world, pos);
 
         if (chest.getLootTable() != null) {
-            ChestData data = trackedChests.computeIfAbsent(chestKey, k -> new ChestData());
+            ChestData data = trackedChests.computeIfAbsent(chestKey, k -> {
+                ChestData newData = new ChestData();
+                newData.lastLootedTime = System.currentTimeMillis(); // Fix: initialize to current time
+                return newData;
+            });
             data.worldName = world.getRegistryKey().getValue().toString();
             data.x = pos.getX();
             data.y = pos.getY();
