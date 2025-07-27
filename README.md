@@ -8,7 +8,7 @@
 
 Modrinth: https://modrinth.com/mod/lootrestock
 
-CurseForge: https://legacy.curseforge.com/minecraft/mc-mods/lootrestock
+CurseForge: https://curseforge.com/minecraft/mc-mods/lootrestock
 
 ## Key Features
 
