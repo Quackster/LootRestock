@@ -4,6 +4,12 @@
 
 **LootRestock** is a lightweight Fabric mod that tracks when chests are looted and automatically resets them after a configurable period. This ensures that loot can replenish over time, ideal for persistent servers, custom maps, and adventure-based gameplay.
 
+### Links
+
+Modrinth: https://modrinth.com/mod/lootrestock
+
+CurseForge: https://legacy.curseforge.com/minecraft/mc-mods/lootrestock
+
 ## Key Features
 
 - Tracks every lootable chest opened by players
