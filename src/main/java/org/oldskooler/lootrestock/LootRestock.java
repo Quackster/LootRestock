@@ -49,10 +49,12 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.world.World;
+import org.oldskooler.lootrestock.mixins.LootChestAccessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -232,7 +234,18 @@ public class LootRestock implements ModInitializer {
     private void handleChestInteraction(World world, BlockPos pos, LootableContainerBlockEntity chest) {
         String chestKey = getChestKey(world, pos);
 
-        if (chest.getLootTable() != null) {
+
+        Identifier lootTableId = null;
+        Long lootTableSeed = null;
+
+        try {
+            lootTableId = ((LootChestAccessor) chest).getLootTableId();
+            lootTableSeed = ((LootChestAccessor) chest).getLootTableSeed();
+        } catch (Exception e) {
+
+        }
+
+        if (lootTableId != null) {
             ChestData data = trackedChests.computeIfAbsent(chestKey, k -> {
                 ChestData newData = new ChestData();
                 newData.lastLootedTime = System.currentTimeMillis(); // Fix: initialize to current time
@@ -242,8 +255,8 @@ public class LootRestock implements ModInitializer {
             data.x = pos.getX();
             data.y = pos.getY();
             data.z = pos.getZ();
-            data.lootTableId = chest.getLootTable().getValue().toString();
-            data.lootSeed = chest.getLootTableSeed();
+            data.lootTableId = lootTableId.toString();
+            data.lootSeed = lootTableSeed;
             data.isEmpty = chest.isEmpty();
             data.dirty = true;
         }
@@ -262,7 +275,7 @@ public class LootRestock implements ModInitializer {
     private void handleMinecartChestInteraction(World world, ChestMinecartEntity chest) {
         String chestKey = world.getRegistryKey().getValue() + ":entity:" + chest.getUuidAsString();
 
-        if (chest.getLootTable() != null) {
+        if (chest.getLootTableId() != null) {
             ChestData data = trackedChests.computeIfAbsent(chestKey, k -> {
                 ChestData newData = new ChestData();
                 newData.lastLootedTime = System.currentTimeMillis();
@@ -271,7 +284,7 @@ public class LootRestock implements ModInitializer {
 
             data.worldName = world.getRegistryKey().getValue().toString();
             data.entityUuid = chest.getUuidAsString();
-            data.lootTableId = chest.getLootTable().getValue().toString();
+            data.lootTableId = chest.getLootTableId().toString();
             data.lootSeed = chest.getLootTableSeed();
             data.x = chest.getBlockPos().getX();
             data.y = chest.getBlockPos().getY();
@@ -407,7 +420,7 @@ public class LootRestock implements ModInitializer {
     private boolean resetChestEntity(ChestMinecartEntity chest, ChestData data) {
         try {
             chest.clear();
-            chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.getLootTableIdentifier()), chest.getWorld().getRandom().nextLong());
+            chest.setLootTable(data.getLootTableIdentifier(), chest.getWorld().getRandom().nextLong());
             chest.generateInventoryLoot(null);
             chest.markDirty();
 
@@ -444,8 +457,8 @@ public class LootRestock implements ModInitializer {
 
             if (blockEntity instanceof LootableContainerBlockEntity chest) {
                 chest.clear();
-                chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.getLootTableIdentifier()), world.getRandom().nextLong());
-                chest.generateLoot(null);
+                chest.setLootTable(data.getLootTableIdentifier(), world.getRandom().nextLong());
+                // chest.generateLoot(null);
                 chest.markDirty();
 
                 LOGGER.info("Reset chest at {} in world {}", pos, data.worldName);
@@ -520,11 +533,11 @@ public class LootRestock implements ModInitializer {
         }
 
         public Identifier getLootTableIdentifier() {
-            return Identifier.of(lootTableId);
+            return new Identifier(lootTableId);
         }
 
         public ServerWorld getWorld(MinecraftServer server) {
-            Identifier worldId = Identifier.of(worldName);
+            Identifier worldId = new Identifier(worldName);
             for (ServerWorld serverWorld : server.getWorlds()) {
                 if (serverWorld.getRegistryKey().getValue().equals(worldId)) {
                     return serverWorld;

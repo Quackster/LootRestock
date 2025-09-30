@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "org.oldskooler.lootrestock.mixins",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "LootChestAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
