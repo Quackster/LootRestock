@@ -407,7 +407,7 @@ public class LootRestock implements ModInitializer {
     private boolean resetChestEntity(ChestMinecartEntity chest, ChestData data) {
         try {
             chest.clear();
-            chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.getLootTableIdentifier()), chest.getWorld().getRandom().nextLong());
+            chest.setLootTable(RegistryKey.of(RegistryKeys.LOOT_TABLE, data.getLootTableIdentifier()), chest.getEntityWorld().getRandom().nextLong());
             chest.generateInventoryLoot(null);
             chest.markDirty();
 
