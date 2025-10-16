@@ -16,6 +16,9 @@ import org.oldskooler.lootrestock.data.ChestData;
 import org.oldskooler.lootrestock.data.ChestDataManager;
 import org.oldskooler.lootrestock.util.EntitySearchUtil;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -143,8 +146,39 @@ public class ChestResetHandler {
     }
 
     private boolean shouldReset(boolean isEmpty, long currentTime, long lastLootedTime) {
-        return (!config.onlyResetWhenEmpty() || isEmpty) &&
-                (currentTime - lastLootedTime) >= config.getResetTimeMs();
+        // Respect the "only reset when empty" rule first
+        if (config.onlyResetWhenEmpty() && !isEmpty) {
+            return false;
+        }
+
+        // If a cron expression is configured, use it instead of fixed time logic
+        if (config.isCronUsed() && config.getCronExpression() != null) {
+            // If a cron parser exists, use it to determine the next scheduled execution after lastLootedTime
+            try {
+                var cronParser = config.getCronParser();
+                if (cronParser != null) {
+                    // Convert epoch millis -> LocalDateTime using system default zone
+                    ZoneId zone = ZoneId.systemDefault();
+                    LocalDateTime lastLootedLdt = LocalDateTime.ofInstant(Instant.ofEpochMilli(lastLootedTime), zone);
+
+                    // getNextExecution returns the next matching LocalDateTime after the provided time
+                    LocalDateTime next = cronParser.getNextExecution(lastLootedLdt);
+
+                    if (next != null) {
+                        long nextMillis = next.atZone(zone).toInstant().toEpochMilli();
+                        return currentTime >= nextMillis;
+                    } else {
+                        LootRestock.LOGGER.warn("Cron parser returned null next execution; falling back to interval logic.");
+                    }
+                }
+            } catch (Exception e) {
+                // Be defensive: any exception -> log and fall back to time-based logic
+                LootRestock.LOGGER.warn("Error while evaluating cron schedule: {}", e.toString());
+            }
+        }
+
+        // Default: use simple time-based reset logic
+        return (currentTime - lastLootedTime) >= config.getResetTimeMs();
     }
 
     /**
