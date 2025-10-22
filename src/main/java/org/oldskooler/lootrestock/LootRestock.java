@@ -3,6 +3,8 @@ package org.oldskooler.lootrestock;
  import net.fabricmc.api.ModInitializer;
  import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
  import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+ import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
+ import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
  import net.fabricmc.fabric.api.event.player.UseBlockCallback;
  import net.fabricmc.fabric.api.event.player.UseEntityCallback;
  import net.minecraft.block.BlockState;
@@ -10,11 +12,14 @@ package org.oldskooler.lootrestock;
  import net.minecraft.block.ChestBlock;
  import net.minecraft.block.entity.BlockEntity;
  import net.minecraft.block.entity.LootableContainerBlockEntity;
+ import net.minecraft.entity.Entity;
  import net.minecraft.entity.vehicle.ChestMinecartEntity;
  import net.minecraft.server.MinecraftServer;
  import net.minecraft.util.ActionResult;
+ import net.minecraft.util.ItemScatterer;
  import net.minecraft.util.hit.HitResult;
  import net.minecraft.util.math.BlockPos;
+ import net.minecraft.world.World;
  import org.oldskooler.lootrestock.config.ModConfig;
  import org.oldskooler.lootrestock.data.ChestDataManager;
  import org.oldskooler.lootrestock.handler.ChestInteractionHandler;
@@ -64,28 +69,63 @@ public class LootRestock implements ModInitializer {
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (!world.isClient() && hitResult.getType() == HitResult.Type.BLOCK) {
                 BlockPos pos = hitResult.getBlockPos();
-                BlockState state = world.getBlockState(pos);
-
-                if (state.getBlock() instanceof ChestBlock ||
-                        (config.includeBarrels() && state.getBlock() instanceof BarrelBlock)) {
-                    BlockEntity blockEntity = world.getBlockEntity(pos);
-                    if (blockEntity instanceof LootableContainerBlockEntity) {
-                        interactionHandler.handleChestInteraction(
-                                world, pos, (LootableContainerBlockEntity) blockEntity
-                        );
-                    }
-                }
+                registerBlockInteraction(world, pos);
             }
             return ActionResult.PASS;
         });
 
         // Register entity interaction callback
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
-            if (!world.isClient() && entity instanceof ChestMinecartEntity chestMinecart) {
-                interactionHandler.handleMinecartChestInteraction(world, chestMinecart);
+            if (!world.isClient()) {
+                registerEntityInteraction(world, entity);
             }
             return ActionResult.PASS;
         });
+
+        // Register block destroy interaction callback
+        PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> {
+            if (!world.isClient() && blockEntity instanceof LootableContainerBlockEntity chestBlockEntity) {
+                boolean isTracked = this.dataManager.isTracked(world, pos);
+                
+                if (isTracked || chestBlockEntity.getLootTable() != null) {
+                    // Add it to tracked list if not already
+                    if (!isTracked) {
+                        registerBlockInteraction(world, pos);
+                    }
+
+                    // Drop the inventory contents naturally
+                    ItemScatterer.spawn(world, pos, chestBlockEntity);
+
+                    // Prevent from actually breaking
+                    return false;
+                }
+            }
+
+            return true;
+        });
+
+        // Register entity destroy interaction callback
+        AttackEntityCallback.EVENT.register((player, world, hand, entity, result) -> {
+            if (!world.isClient() && entity instanceof ChestMinecartEntity chestMinecart) {
+                boolean isEntityTracked = this.dataManager.isEntityTracked(world, entity.getUuidAsString());
+                
+                if (isEntityTracked || chestMinecart.getLootTable() != null) {
+                    // Add it to tracked list if not already
+                    if (!isEntityTracked) {
+                        registerEntityInteraction(world, entity);
+                    }
+
+                    // Drop the inventory contents naturally
+                    ItemScatterer.spawn(world, chestMinecart.getBlockPos(), chestMinecart.getInventory());
+                    
+                    // Prevent from actually breaking
+                    return ActionResult.FAIL;
+                }
+            }
+
+            return ActionResult.PASS;
+        });
+
 
         // Server lifecycle events
         ServerLifecycleEvents.SERVER_STARTED.register(this::onServerStart);
@@ -101,7 +141,27 @@ public class LootRestock implements ModInitializer {
         });
     }
 
-    private void onServerStart(MinecraftServer server) {
+     private void registerEntityInteraction(World world, Entity entity) {
+         if (entity instanceof ChestMinecartEntity chestMinecart) {
+             interactionHandler.handleMinecartChestInteraction(world, chestMinecart);
+         }
+     }
+
+     private void registerBlockInteraction(World world, BlockPos pos) {
+         BlockState state = world.getBlockState(pos);
+
+         if (state.getBlock() instanceof ChestBlock ||
+                 (config.includeBarrels() && state.getBlock() instanceof BarrelBlock)) {
+             BlockEntity blockEntity = world.getBlockEntity(pos);
+             if (blockEntity instanceof LootableContainerBlockEntity) {
+                 interactionHandler.handleChestInteraction(
+                         world, pos, (LootableContainerBlockEntity) blockEntity
+                 );
+             }
+         }
+     }
+
+     private void onServerStart(MinecraftServer server) {
         dataManager.initialize(server);
         LOGGER.info("LootRestock mod loaded {} tracked chests", dataManager.getTrackedChestCount());
     }

@@ -3,12 +3,14 @@ package org.oldskooler.lootrestock.config;
 import org.oldskooler.lootrestock.LootRestock;
 import org.oldskooler.lootrestock.util.CronParser;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -26,6 +28,7 @@ import java.util.Properties;
  *   <li><b>reset_cron</b>: Optional cron expression (e.g. "0 0/30 * * * ?" or standard 5-field "0 0 * * *")</li>
  *   <li><b>only_reset_when_empty</b>: true/false (default: true)</li>
  *   <li><b>include_barrels</b>: true/false (default: false)</li>
+ *   <li><b>allow_chest_breaking</b>: Who can break chests - "op_only", "anyone", or "no_one" (default: op_only)</li>
  * </ul>
  *
  * Notes:
@@ -40,14 +43,17 @@ public class ModConfig {
     private static final String CONFIG_CRON_KEY = "reset_cron";
     private static final String CONFIG_ONLY_RESET_WHEN_EMPTY_KEY = "only_reset_when_empty";
     private static final String CONFIG_INCLUDE_BARRELS_KEY = "include_barrels";
+    private static final String CONFIG_ALLOW_CHEST_BREAKING_KEY = "allow_chest_breaking";
 
     private static final long DEFAULT_RESET_TIME_VALUE = 7;
     private static final String DEFAULT_RESET_TIME_UNIT = "days";
     private static final boolean DEFAULT_ONLY_RESET_WHEN_EMPTY = true;
     private static final boolean DEFAULT_INCLUDE_BARRELS = false;
+    private static final ChestBreakingPermission DEFAULT_CHEST_BREAKING = ChestBreakingPermission.OP_ONLY;
 
     private boolean includeBarrels;
     private boolean onlyResetWhenEmpty;
+    private ChestBreakingPermission chestBreakingPermission;
 
     // If cron is used, this flag is true and cronExpression contains the raw expression.
     private boolean useCron = false;
@@ -58,6 +64,39 @@ public class ModConfig {
     // - If useCron == false: fixed interval in milliseconds (e.g., 7 days).
     // - If useCron == true: milliseconds until the next scheduled cron firing (nextValidTime - now).
     private long resetTimeMs;
+
+    /**
+     * Enum representing who can break chests with loot tables.
+     */
+    public enum ChestBreakingPermission {
+        OP_ONLY,    // Only server operators can break chests
+        ANYONE,     // Anyone can break chests
+        NO_ONE;     // No one can break chests (protected)
+
+        public static ChestBreakingPermission fromString(String value) {
+            if (value == null) return DEFAULT_CHEST_BREAKING;
+
+            return switch (value.toLowerCase().trim()) {
+                case "op_only", "op" -> OP_ONLY;
+                case "anyone", "all" -> ANYONE;
+                case "no_one", "none", "nobody" -> NO_ONE;
+                default -> {
+                    LootRestock.LOGGER.warn("Invalid chest breaking permission '{}'. Using default: {}",
+                            value, DEFAULT_CHEST_BREAKING);
+                    yield DEFAULT_CHEST_BREAKING;
+                }
+            };
+        }
+
+        @Override
+        public String toString() {
+            return switch (this) {
+                case OP_ONLY -> "op_only";
+                case ANYONE -> "anyone";
+                case NO_ONE -> "no_one";
+            };
+        }
+    }
 
     /**
      * Loads configuration from the config file.
@@ -124,6 +163,10 @@ public class ModConfig {
                     config.getProperty(CONFIG_INCLUDE_BARRELS_KEY,
                             String.valueOf(DEFAULT_INCLUDE_BARRELS))
             );
+            chestBreakingPermission = ChestBreakingPermission.fromString(
+                    config.getProperty(CONFIG_ALLOW_CHEST_BREAKING_KEY,
+                            DEFAULT_CHEST_BREAKING.toString())
+            );
 
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_TIME_VALUE_KEY,
                     config.getProperty(CONFIG_TIME_VALUE_KEY));
@@ -133,24 +176,65 @@ public class ModConfig {
                     config.getProperty(CONFIG_CRON_KEY));
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ONLY_RESET_WHEN_EMPTY_KEY, onlyResetWhenEmpty);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_INCLUDE_BARRELS_KEY, includeBarrels);
+            LootRestock.LOGGER.info("'{}' = {}", CONFIG_ALLOW_CHEST_BREAKING_KEY, chestBreakingPermission);
         }
     }
 
     private void createDefaultConfig(Properties config, Path configPath) throws IOException {
-        config.setProperty(CONFIG_TIME_VALUE_KEY, String.valueOf(DEFAULT_RESET_TIME_VALUE));
-        config.setProperty(CONFIG_TIME_UNIT_KEY, DEFAULT_RESET_TIME_UNIT);
-        config.setProperty(CONFIG_ONLY_RESET_WHEN_EMPTY_KEY, String.valueOf(DEFAULT_ONLY_RESET_WHEN_EMPTY));
-        config.setProperty(CONFIG_INCLUDE_BARRELS_KEY, String.valueOf(DEFAULT_INCLUDE_BARRELS));
-        // Leave reset_cron blank by default
-        config.setProperty(CONFIG_CRON_KEY, "");
-
         Files.createFile(configPath);
+
+        // Write config file with comments manually for better formatting
         try (OutputStream out = Files.newOutputStream(configPath)) {
-            config.store(out, "LootRestock Configuration");
+            StringBuilder sb = new StringBuilder();
+            sb.append("# LootRestock Configuration\n");
+            sb.append("# \n");
+            sb.append("# This file controls how loot chests and barrels respawn in your world.\n");
+            sb.append("\n");
+            sb.append("# ==================== RESET TIMING ====================\n");
+            sb.append("# How often should loot containers reset?\n");
+            sb.append("# Use either the time value/unit combo OR the cron expression below.\n");
+            sb.append("# \n");
+            sb.append("# Reset time value (positive number)\n");
+            sb.append(CONFIG_TIME_VALUE_KEY).append("=").append(DEFAULT_RESET_TIME_VALUE).append("\n");
+            sb.append("# \n");
+            sb.append("# Reset time unit (seconds, minutes, hours, days)\n");
+            sb.append(CONFIG_TIME_UNIT_KEY).append("=").append(DEFAULT_RESET_TIME_UNIT).append("\n");
+            sb.append("# \n");
+            sb.append("# Advanced: Cron expression for scheduled resets (optional)\n");
+            sb.append("# If set, this takes precedence over reset_time_value/reset_time_unit\n");
+            sb.append("# Examples:\n");
+            sb.append("#   \"0 0 * * *\"     - Daily at midnight\n");
+            sb.append("#   \"0 0 * * 0\"     - Weekly on Sunday at midnight\n");
+            sb.append("#   \"0 */6 * * *\"   - Every 6 hours\n");
+            sb.append("#   \"0 0 1 * *\"     - Monthly on the 1st at midnight\n");
+            sb.append(CONFIG_CRON_KEY).append("=\n");
+            sb.append("\n");
+            sb.append("# ==================== RESET BEHAVIOR ====================\n");
+            sb.append("# Only reset containers when they are completely empty?\n");
+            sb.append("# If true, containers with any items left will not reset\n");
+            sb.append("# If false, containers will reset at the scheduled time regardless of contents\n");
+            sb.append(CONFIG_ONLY_RESET_WHEN_EMPTY_KEY).append("=").append(DEFAULT_ONLY_RESET_WHEN_EMPTY).append("\n");
+            sb.append("\n");
+            sb.append("# ==================== CONTAINER TYPES ====================\n");
+            sb.append("# Should barrels be included in the reset system?\n");
+            sb.append("# If true, barrels with loot tables will reset like chests\n");
+            sb.append("# If false, only chests will reset\n");
+            sb.append(CONFIG_INCLUDE_BARRELS_KEY).append("=").append(DEFAULT_INCLUDE_BARRELS).append("\n");
+            sb.append("\n");
+            sb.append("# ==================== PROTECTION ====================\n");
+            sb.append("# Who can break loot containers?\n");
+            sb.append("# Options:\n");
+            sb.append("#   op_only  - Only server operators can break chests (default)\n");
+            sb.append("#   anyone   - Anyone can break chests\n");
+            sb.append("#   no_one   - No one can break chests (fully protected)\n");
+            sb.append(CONFIG_ALLOW_CHEST_BREAKING_KEY).append("=").append(DEFAULT_CHEST_BREAKING.toString()).append("\n");
+
+            out.write(sb.toString().getBytes());
         }
 
         onlyResetWhenEmpty = DEFAULT_ONLY_RESET_WHEN_EMPTY;
         includeBarrels = DEFAULT_INCLUDE_BARRELS;
+        chestBreakingPermission = DEFAULT_CHEST_BREAKING;
         useCron = false;
         cronExpression = null;
     }
@@ -204,6 +288,13 @@ public class ModConfig {
 
     public boolean onlyResetWhenEmpty() {
         return onlyResetWhenEmpty;
+    }
+
+    /**
+     * Returns the chest breaking permission setting.
+     */
+    public ChestBreakingPermission getChestBreakingPermission() {
+        return chestBreakingPermission;
     }
 
     /**

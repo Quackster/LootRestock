@@ -148,4 +148,29 @@ public class ChestDataManager {
     public static String createEntityChestKey(World world, String entityUuid) {
         return world.getRegistryKey().getValue() + ":entity:" + entityUuid;
     }
+
+
+    /**
+     * Checks if a block-based chest is being tracked.
+     *
+     * @param world the world the chest is in
+     * @param pos the block position of the chest
+     * @return true if the chest is tracked, false otherwise
+     */
+    public boolean isTracked(World world, BlockPos pos) {
+        String key = createChestKey(world, pos);
+        return trackedChests.containsKey(key);
+    }
+
+    /**
+     * Checks if an entity-based chest is being tracked.
+     *
+     * @param world the world the chest is in
+     * @param entityUuid the UUID of the chest minecart
+     * @return true if the chest is tracked, false otherwise
+     */
+    public boolean isEntityTracked(World world, String entityUuid) {
+        String key = createEntityChestKey(world, entityUuid);
+        return trackedChests.containsKey(key);
+    }
 }
