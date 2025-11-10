@@ -1,11 +1,10 @@
 package org.oldskooler.lootrestock.util;
 
-import net.minecraft.entity.vehicle.ChestMinecartEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.vehicle.MinecartChest;
+import net.minecraft.world.phys.AABB;
 
 /**
  * Utility class for searching and locating entities in the world.
@@ -22,7 +21,7 @@ public class EntitySearchUtil {
      * @param pos the position around which to search
      * @return the matching ChestMinecartEntity, or null if not found or UUID is invalid
      */
-    public static ChestMinecartEntity findMinecartChestByUuid(ServerWorld world, String uuidStr, BlockPos pos) {
+    public static MinecartChest findMinecartChestByUuid(ServerLevel world, String uuidStr, BlockPos pos) {
         return findMinecartChestByUuid(world, uuidStr, pos, DEFAULT_SEARCH_DISTANCE);
     }
 
@@ -36,14 +35,14 @@ public class EntitySearchUtil {
      * @param searchDistance the distance in blocks to search around the position
      * @return the matching ChestMinecartEntity, or null if not found or UUID is invalid
      */
-    public static ChestMinecartEntity findMinecartChestByUuid(ServerWorld world, String uuidStr,
+    public static MinecartChest findMinecartChestByUuid(ServerLevel world, String uuidStr,
                                                               BlockPos pos, int searchDistance) {
         try {
-            Box searchBox = new Box(pos).expand(searchDistance);
+            AABB searchBox = new AABB(pos).inflate(searchDistance);
             UUID uuid = UUID.fromString(uuidStr);
 
-            return world.getEntitiesByClass(ChestMinecartEntity.class, searchBox,
-                            entity -> entity.getUuid().equals(uuid))
+            return world.getEntitiesOfClass(MinecartChest.class, searchBox,
+                            entity -> entity.getUUID().equals(uuid))
                     .stream()
                     .findFirst()
                     .orElse(null);

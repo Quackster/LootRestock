@@ -3,10 +3,10 @@ package org.oldskooler.lootrestock.data;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.WorldSavePath;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.LevelResource;
 import org.oldskooler.lootrestock.LootRestock;
 
 import java.io.IOException;
@@ -33,7 +33,7 @@ public class ChestDataManager {
      * @param server the MinecraftServer instance
      */
     public void initialize(MinecraftServer server) {
-        this.dataFile = server.getSavePath(WorldSavePath.ROOT).resolve(DATA_FILE_NAME);
+        this.dataFile = server.getWorldPath(LevelResource.ROOT).resolve(DATA_FILE_NAME);
         load();
     }
 
@@ -134,8 +134,8 @@ public class ChestDataManager {
      * @param pos the block position of the chest
      * @return a unique string key
      */
-    public static String createChestKey(World world, BlockPos pos) {
-        return world.getRegistryKey().getValue().toString() + ":" + pos.toShortString();
+    public static String createChestKey(Level world, BlockPos pos) {
+        return world.dimension().location().toString() + ":" + pos.toShortString();
     }
 
     /**
@@ -145,8 +145,8 @@ public class ChestDataManager {
      * @param entityUuid the UUID of the chest minecart
      * @return a unique string key
      */
-    public static String createEntityChestKey(World world, String entityUuid) {
-        return world.getRegistryKey().getValue() + ":entity:" + entityUuid;
+    public static String createEntityChestKey(Level world, String entityUuid) {
+        return world.dimension().location() + ":entity:" + entityUuid;
     }
 
 
@@ -157,7 +157,7 @@ public class ChestDataManager {
      * @param pos the block position of the chest
      * @return true if the chest is tracked, false otherwise
      */
-    public boolean isTracked(World world, BlockPos pos) {
+    public boolean isTracked(Level world, BlockPos pos) {
         String key = createChestKey(world, pos);
         return trackedChests.containsKey(key);
     }
@@ -169,7 +169,7 @@ public class ChestDataManager {
      * @param entityUuid the UUID of the chest minecart
      * @return true if the chest is tracked, false otherwise
      */
-    public boolean isEntityTracked(World world, String entityUuid) {
+    public boolean isEntityTracked(Level world, String entityUuid) {
         String key = createEntityChestKey(world, entityUuid);
         return trackedChests.containsKey(key);
     }

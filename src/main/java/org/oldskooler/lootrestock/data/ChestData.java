@@ -1,9 +1,9 @@
 package org.oldskooler.lootrestock.data;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 
 /**
  * Serializable class for tracking chest state.
@@ -28,8 +28,8 @@ public class ChestData {
         return new BlockPos(x, y, z);
     }
 
-    public Identifier getLootTableIdentifier() {
-        return Identifier.of(lootTableId);
+    public ResourceLocation getLootTableIdentifier() {
+        return ResourceLocation.parse(lootTableId);
     }
 
     /**
@@ -38,10 +38,10 @@ public class ChestData {
      * @param server the MinecraftServer instance
      * @return the ServerWorld, or null if the world no longer exists
      */
-    public ServerWorld getWorld(MinecraftServer server) {
-        Identifier worldId = Identifier.of(worldName);
-        for (ServerWorld serverWorld : server.getWorlds()) {
-            if (serverWorld.getRegistryKey().getValue().equals(worldId)) {
+    public ServerLevel getWorld(MinecraftServer server) {
+        ResourceLocation worldId = ResourceLocation.parse(worldName);
+        for (ServerLevel serverWorld : server.getAllLevels()) {
+            if (serverWorld.dimension().location().equals(worldId)) {
                 return serverWorld;
             }
         }

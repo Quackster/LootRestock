@@ -1,15 +1,14 @@
 package org.oldskooler.lootrestock.handler;
 
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.entity.LootableContainerBlockEntity;
-import net.minecraft.entity.vehicle.ChestMinecartEntity;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.ChunkSectionPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.vehicle.MinecartChest;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import org.oldskooler.lootrestock.LootRestock;
 import org.oldskooler.lootrestock.config.ModConfig;
 import org.oldskooler.lootrestock.data.ChestData;
@@ -58,7 +57,7 @@ public class ChestResetHandler {
             Map.Entry<String, ChestData> entry = iterator.next();
             ChestData data = entry.getValue();
             BlockPos pos = data.getBlockPos();
-            ServerWorld world = data.getWorld(server);
+            ServerLevel world = data.getWorld(server);
 
             if (world == null) {
                 LootRestock.LOGGER.info("Removing chest from tracking: world '{}' no longer exists",
@@ -68,9 +67,9 @@ public class ChestResetHandler {
                 continue;
             }
 
-            if (!world.isChunkLoaded(
-                    ChunkSectionPos.getSectionCoord(pos.getX()),
-                    ChunkSectionPos.getSectionCoord(pos.getZ()))) {
+            if (!world.hasChunk(
+                    SectionPos.blockToSectionCoord(pos.getX()),
+                    SectionPos.blockToSectionCoord(pos.getZ()))) {
                 LootRestock.LOGGER.debug("Chunk not loaded for chest at {}. Skipping reset.", pos);
                 continue;
             }
@@ -98,9 +97,9 @@ public class ChestResetHandler {
         }
     }
 
-    private boolean processEntityChest(ChestData data, ServerWorld world, long currentTime,
+    private boolean processEntityChest(ChestData data, ServerLevel world, long currentTime,
                                        Iterator<Map.Entry<String, ChestData>> iterator, AtomicInteger resetCount) {
-        ChestMinecartEntity entity = EntitySearchUtil.findMinecartChestByUuid(
+        MinecartChest entity = EntitySearchUtil.findMinecartChestByUuid(
                 world, data.getEntityUuid(), data.getBlockPos()
         );
 
@@ -122,11 +121,11 @@ public class ChestResetHandler {
         return false;
     }
 
-    private boolean processBlockChest(ChestData data, ServerWorld world, long currentTime,
+    private boolean processBlockChest(ChestData data, ServerLevel world, long currentTime,
                                       Iterator<Map.Entry<String, ChestData>> iterator, AtomicInteger resetCount) {
         BlockEntity blockEntity = world.getBlockEntity(data.getBlockPos());
 
-        if (!(blockEntity instanceof LootableContainerBlockEntity chest)) {
+        if (!(blockEntity instanceof RandomizableContainerBlockEntity chest)) {
             LootRestock.LOGGER.info("Removing chest from tracking: block at {} is no longer a lootable container",
                     data.getBlockPos());
             iterator.remove();
@@ -189,18 +188,18 @@ public class ChestResetHandler {
      * @param data  the stored chest data, including loot table info
      * @return true if the chest was successfully reset, false otherwise
      */
-    private boolean resetChestEntity(ChestMinecartEntity chest, ChestData data) {
+    private boolean resetChestEntity(MinecartChest chest, ChestData data) {
         try {
-            chest.clear();
+            chest.clearContent();
             chest.setLootTable(
-                    RegistryKey.of(RegistryKeys.LOOT_TABLE, data.getLootTableIdentifier()),
-                    chest.getEntityWorld().getRandom().nextLong()
+                    ResourceKey.create(Registries.LOOT_TABLE, data.getLootTableIdentifier()),
+                    chest.level().getRandom().nextLong()
             );
-            chest.generateInventoryLoot(null);
-            chest.markDirty();
+            chest.unpackChestVehicleLootTable(null);
+            chest.setChanged();
 
             LootRestock.LOGGER.info("Reset chest minecart at {} in world {}",
-                    chest.getBlockPos(), data.getWorldName());
+                    chest.blockPosition(), data.getWorldName());
             return true;
         } catch (Exception e) {
             LootRestock.LOGGER.error("Failed to reset chest minecart: {}", e.getMessage());
@@ -219,19 +218,19 @@ public class ChestResetHandler {
      * @param world The ServerWorld where the chest is located
      * @return true if the chest was successfully reset; false otherwise.
      */
-    private boolean resetChest(ChestData data, ServerWorld world) {
+    private boolean resetChest(ChestData data, ServerLevel world) {
         try {
             BlockPos pos = data.getBlockPos();
             BlockEntity blockEntity = world.getBlockEntity(pos);
 
-            if (blockEntity instanceof LootableContainerBlockEntity chest) {
-                chest.clear();
+            if (blockEntity instanceof RandomizableContainerBlockEntity chest) {
+                chest.clearContent();
                 chest.setLootTable(
-                        RegistryKey.of(RegistryKeys.LOOT_TABLE, data.getLootTableIdentifier()),
+                        ResourceKey.create(Registries.LOOT_TABLE, data.getLootTableIdentifier()),
                         world.getRandom().nextLong()
                 );
-                chest.generateLoot(null);
-                chest.markDirty();
+                chest.unpackLootTable(null);
+                chest.setChanged();
 
                 LootRestock.LOGGER.info("Reset chest at {} in world {}", pos, data.getWorldName());
                 return true;
