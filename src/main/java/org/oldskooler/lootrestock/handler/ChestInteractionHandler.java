@@ -1,7 +1,7 @@
 package org.oldskooler.lootrestock.handler;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.vehicle.MinecartChest;
+import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import org.oldskooler.lootrestock.data.ChestData;
@@ -34,11 +34,11 @@ public class ChestInteractionHandler {
         String chestKey = ChestDataManager.createChestKey(world, pos);
         ChestData data = dataManager.getOrCreate(chestKey);
 
-        data.setWorldName(world.dimension().location().toString());
+        data.setWorldName(world.dimension().identifier().toString());
         data.setX(pos.getX());
         data.setY(pos.getY());
         data.setZ(pos.getZ());
-        data.setLootTableId(chest.getLootTable().location().toString());
+        data.setLootTableId(chest.getLootTable().identifier().toString());
         data.setLootSeed(chest.getLootTableSeed());
         data.setEmpty(chest.isEmpty());
         data.setDirty(true);
@@ -61,9 +61,9 @@ public class ChestInteractionHandler {
         String chestKey = ChestDataManager.createEntityChestKey(world, chest.getStringUUID());
         ChestData data = dataManager.getOrCreate(chestKey);
 
-        data.setWorldName(world.dimension().location().toString());
+        data.setWorldName(world.dimension().identifier().toString());
         data.setEntityUuid(chest.getStringUUID());
-        data.setLootTableId(chest.getContainerLootTable().location().toString());
+        data.setLootTableId(chest.getContainerLootTable().identifier().toString());
         data.setLootSeed(chest.getContainerLootTableSeed());
         data.setX(chest.blockPosition().getX());
         data.setY(chest.blockPosition().getY());

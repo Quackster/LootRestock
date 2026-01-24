@@ -1,7 +1,7 @@
 package org.oldskooler.lootrestock.data;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
@@ -28,8 +28,8 @@ public class ChestData {
         return new BlockPos(x, y, z);
     }
 
-    public ResourceLocation getLootTableIdentifier() {
-        return ResourceLocation.parse(lootTableId);
+    public Identifier getLootTableIdentifier() {
+        return Identifier.parse(lootTableId);
     }
 
     /**
@@ -39,9 +39,9 @@ public class ChestData {
      * @return the ServerWorld, or null if the world no longer exists
      */
     public ServerLevel getWorld(MinecraftServer server) {
-        ResourceLocation worldId = ResourceLocation.parse(worldName);
+        Identifier worldId = Identifier.parse(worldName);
         for (ServerLevel serverWorld : server.getAllLevels()) {
-            if (serverWorld.dimension().location().equals(worldId)) {
+            if (serverWorld.dimension().identifier().equals(worldId)) {
                 return serverWorld;
             }
         }

@@ -135,7 +135,7 @@ public class ChestDataManager {
      * @return a unique string key
      */
     public static String createChestKey(Level world, BlockPos pos) {
-        return world.dimension().location().toString() + ":" + pos.toShortString();
+        return world.dimension().identifier().toString() + ":" + pos.toShortString();
     }
 
     /**
@@ -146,7 +146,7 @@ public class ChestDataManager {
      * @return a unique string key
      */
     public static String createEntityChestKey(Level world, String entityUuid) {
-        return world.dimension().location() + ":entity:" + entityUuid;
+        return world.dimension().identifier() + ":entity:" + entityUuid;
     }
 
 
