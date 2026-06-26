@@ -7,6 +7,7 @@ import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
+import net.minecraft.world.level.block.entity.vault.VaultBlockEntity;
 import org.oldskooler.lootrestock.data.ChestData;
 import org.oldskooler.lootrestock.data.ChestDataManager;
 
@@ -103,6 +104,27 @@ public class ChestInteractionHandler {
         data.setZ(pos.getZ());
         data.setItemId(BuiltInRegistries.ITEM.getKey(heldStack.getItem()).toString());
         data.setItemCount(heldStack.getCount());
+        data.setEmpty(false);
+        data.setDirty(true);
+    }
+
+    /**
+     * Handles interaction with a trial chamber vault.
+     * Vaults are tracked so rewarded-player UUIDs can expire after the vault reset interval.
+     *
+     * @param world the world the vault is in
+     * @param pos the block position of the vault
+     * @param vault the vault block entity being interacted with
+     */
+    public void handleVaultInteraction(Level world, BlockPos pos, VaultBlockEntity vault) {
+        String vaultKey = ChestDataManager.createVaultKey(world, pos);
+        ChestData data = dataManager.getOrCreate(vaultKey);
+
+        data.setType(ChestData.TYPE_VAULT);
+        data.setWorldName(world.dimension().identifier().toString());
+        data.setX(pos.getX());
+        data.setY(pos.getY());
+        data.setZ(pos.getZ());
         data.setEmpty(false);
         data.setDirty(true);
     }

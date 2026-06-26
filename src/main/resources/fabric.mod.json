@@ -19,7 +19,9 @@
 			"org.oldskooler.lootrestock.LootRestock"
 		]
 	},
-	"mixins": [],
+	"mixins": [
+		"lootrestock.mixins.json"
+	],
 	"depends": {
       "fabricloader": ">=0.19.3",
       "minecraft": "~26.2",

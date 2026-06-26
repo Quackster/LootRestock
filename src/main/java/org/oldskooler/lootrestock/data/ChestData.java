@@ -5,6 +5,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Serializable class for tracking chest state.
  * Supports block-based chests, entity-based chests, and item frames.
@@ -13,6 +16,7 @@ public class ChestData {
     public static final String TYPE_BLOCK_CHEST = "block_chest";
     public static final String TYPE_ENTITY_CHEST = "entity_chest";
     public static final String TYPE_ITEM_FRAME = "item_frame";
+    public static final String TYPE_VAULT = "vault";
 
     // Common fields
     String type;
@@ -29,6 +33,9 @@ public class ChestData {
     // Item frame fields
     String itemId;
     int itemCount;
+
+    // Vault fields
+    Map<String, Long> vaultRewardedPlayerTimes;
 
     // Transient field for tracking changes
     transient boolean dirty = false;
@@ -77,6 +84,15 @@ public class ChestData {
      */
     public boolean isItemFrame() {
         return TYPE_ITEM_FRAME.equals(type);
+    }
+
+    /**
+     * Checks if this data represents a trial chamber vault.
+     *
+     * @return true if this is a vault
+     */
+    public boolean isVault() {
+        return TYPE_VAULT.equals(type);
     }
 
     public String getType() {
@@ -160,6 +176,13 @@ public class ChestData {
 
     public void setItemCount(int itemCount) {
         this.itemCount = itemCount;
+    }
+
+    public Map<String, Long> getVaultRewardedPlayerTimes() {
+        if (vaultRewardedPlayerTimes == null) {
+            vaultRewardedPlayerTimes = new HashMap<>();
+        }
+        return vaultRewardedPlayerTimes;
     }
 
     public long getLastLootedTime() {

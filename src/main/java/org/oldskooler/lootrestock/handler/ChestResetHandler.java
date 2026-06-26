@@ -13,10 +13,13 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
+import net.minecraft.world.level.block.entity.vault.VaultBlockEntity;
+import net.minecraft.world.level.block.entity.vault.VaultServerData;
 import org.oldskooler.lootrestock.LootRestock;
 import org.oldskooler.lootrestock.config.ModConfig;
 import org.oldskooler.lootrestock.data.ChestData;
 import org.oldskooler.lootrestock.data.ChestDataManager;
+import org.oldskooler.lootrestock.mixin.VaultServerDataAccessor;
 import org.oldskooler.lootrestock.util.EntitySearchUtil;
 
 import java.time.Instant;
@@ -24,6 +27,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -82,6 +87,8 @@ public class ChestResetHandler {
                 needsSave |= processEntityChest(data, world, currentTime, iterator, resetCount);
             } else if (data.isItemFrame()) {
                 needsSave |= processItemFrame(data, world, currentTime, iterator, resetCount);
+            } else if (data.isVault()) {
+                needsSave |= processVault(data, world, currentTime, iterator, resetCount);
             } else {
                 needsSave |= processBlockChest(data, world, currentTime, iterator, resetCount);
             }
@@ -125,6 +132,108 @@ public class ChestResetHandler {
         }
 
         return false;
+    }
+
+    private boolean processVault(ChestData data, ServerLevel world, long currentTime,
+                                 Iterator<Map.Entry<String, ChestData>> iterator, AtomicInteger resetCount) {
+        if (!config.includeVaults()) {
+            return false;
+        }
+
+        BlockEntity blockEntity = world.getBlockEntity(data.getBlockPos());
+
+        if (!(blockEntity instanceof VaultBlockEntity vault)) {
+            LootRestock.LOGGER.info("Removing vault from tracking: block at {} is no longer a vault",
+                    data.getBlockPos());
+            iterator.remove();
+            return true;
+        }
+
+        VaultServerData serverData = vault.getServerData();
+        Set<UUID> rewardedPlayers = ((VaultServerDataAccessor) serverData).getRewardedPlayers();
+        Map<String, Long> trackedRewardedPlayers = data.getVaultRewardedPlayerTimes();
+        if (rewardedPlayers.isEmpty()) {
+            if (!trackedRewardedPlayers.isEmpty()) {
+                trackedRewardedPlayers.clear();
+                data.setDirty(true);
+            }
+            return false;
+        }
+
+        boolean dataChanged = removeUnrewardedTrackedPlayers(trackedRewardedPlayers, rewardedPlayers);
+        for (UUID rewardedPlayer : rewardedPlayers) {
+            String playerKey = rewardedPlayer.toString();
+            if (!trackedRewardedPlayers.containsKey(playerKey)) {
+                trackedRewardedPlayers.put(playerKey, currentTime);
+                dataChanged = true;
+            }
+        }
+
+        int removedPlayerCount = removeExpiredVaultPlayers(trackedRewardedPlayers, rewardedPlayers, currentTime);
+        if (removedPlayerCount > 0) {
+            ((VaultServerDataAccessor) serverData).markChanged();
+            vault.setChanged();
+
+            resetCount.incrementAndGet();
+            data.setLastLootedTime(currentTime);
+            dataChanged = true;
+
+            LootRestock.LOGGER.info("Removed {} expired rewarded player UUIDs from vault at {} in world {}",
+                    removedPlayerCount, data.getBlockPos(), data.getWorldName());
+        }
+
+        if (dataChanged) {
+            data.setDirty(true);
+        }
+
+        return false;
+    }
+
+    private boolean removeUnrewardedTrackedPlayers(Map<String, Long> trackedRewardedPlayers, Set<UUID> rewardedPlayers) {
+        boolean changed = false;
+        Iterator<Map.Entry<String, Long>> iterator = trackedRewardedPlayers.entrySet().iterator();
+
+        while (iterator.hasNext()) {
+            Map.Entry<String, Long> entry = iterator.next();
+            try {
+                UUID playerUuid = UUID.fromString(entry.getKey());
+                if (!rewardedPlayers.contains(playerUuid)) {
+                    iterator.remove();
+                    changed = true;
+                }
+            } catch (IllegalArgumentException e) {
+                iterator.remove();
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private int removeExpiredVaultPlayers(Map<String, Long> trackedRewardedPlayers,
+                                          Set<UUID> rewardedPlayers,
+                                          long currentTime) {
+        int removedPlayerCount = 0;
+        Iterator<Map.Entry<String, Long>> iterator = trackedRewardedPlayers.entrySet().iterator();
+
+        while (iterator.hasNext()) {
+            Map.Entry<String, Long> entry = iterator.next();
+            UUID playerUuid;
+            try {
+                playerUuid = UUID.fromString(entry.getKey());
+            } catch (IllegalArgumentException e) {
+                iterator.remove();
+                continue;
+            }
+
+            if (rewardedPlayers.contains(playerUuid) && shouldResetVault(currentTime, entry.getValue())) {
+                rewardedPlayers.remove(playerUuid);
+                iterator.remove();
+                removedPlayerCount++;
+            }
+        }
+
+        return removedPlayerCount;
     }
 
     private boolean processItemFrame(ChestData data, ServerLevel world, long currentTime,
@@ -209,6 +318,30 @@ public class ChestResetHandler {
 
         // Default: use simple time-based reset logic
         return (currentTime - lastLootedTime) >= config.getResetTimeMs();
+    }
+
+    private boolean shouldResetVault(long currentTime, long lastLootedTime) {
+        if (config.isVaultCronUsed() && config.getVaultCronExpression() != null) {
+            try {
+                var cronParser = config.getVaultCronParser();
+                if (cronParser != null) {
+                    ZoneId zone = ZoneId.systemDefault();
+                    LocalDateTime lastLootedLdt = LocalDateTime.ofInstant(Instant.ofEpochMilli(lastLootedTime), zone);
+                    LocalDateTime next = cronParser.getNextExecution(lastLootedLdt);
+
+                    if (next != null) {
+                        long nextMillis = next.atZone(zone).toInstant().toEpochMilli();
+                        return currentTime >= nextMillis;
+                    } else {
+                        LootRestock.LOGGER.warn("Vault cron parser returned null next execution; falling back to interval logic.");
+                    }
+                }
+            } catch (Exception e) {
+                LootRestock.LOGGER.warn("Error while evaluating vault cron schedule: {}", e.toString());
+            }
+        }
+
+        return (currentTime - lastLootedTime) >= config.getVaultResetTimeMs();
     }
 
     /**

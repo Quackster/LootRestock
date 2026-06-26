@@ -3,19 +3,13 @@ package org.oldskooler.lootrestock.config;
 import org.oldskooler.lootrestock.LootRestock;
 import org.oldskooler.lootrestock.util.CronParser;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.Properties;
 
 /**
@@ -46,18 +40,24 @@ public class ModConfig {
     private static final String CONFIG_ONLY_RESET_WHEN_EMPTY_KEY = "only_reset_when_empty";
     private static final String CONFIG_INCLUDE_BARRELS_KEY = "include_barrels";
     private static final String CONFIG_INCLUDE_ITEM_FRAMES_KEY = "include_item_frames";
+    private static final String CONFIG_INCLUDE_VAULTS_KEY = "include_vaults";
     private static final String CONFIG_ALLOW_CHEST_BREAKING_KEY = "allow_chest_breaking";
     private static final String CONFIG_ALLOW_ITEM_FRAME_BREAKING_KEY = "allow_item_frame_breaking";
+    private static final String CONFIG_VAULT_TIME_VALUE_KEY = "vault_reset_time_value";
+    private static final String CONFIG_VAULT_TIME_UNIT_KEY = "vault_reset_time_unit";
+    private static final String CONFIG_VAULT_CRON_KEY = "vault_reset_cron";
 
     private static final long DEFAULT_RESET_TIME_VALUE = 7;
     private static final String DEFAULT_RESET_TIME_UNIT = "days";
     private static final boolean DEFAULT_ONLY_RESET_WHEN_EMPTY = true;
     private static final boolean DEFAULT_INCLUDE_BARRELS = false;
     private static final boolean DEFAULT_INCLUDE_ITEM_FRAMES = false;
+    private static final boolean DEFAULT_INCLUDE_VAULTS = false;
     private static final ChestBreakingPermission DEFAULT_CHEST_BREAKING = ChestBreakingPermission.OP_ONLY;
 
     private boolean includeBarrels;
     private boolean includeItemFrames;
+    private boolean includeVaults;
     private boolean onlyResetWhenEmpty;
     private ChestBreakingPermission chestBreakingPermission;
     private ChestBreakingPermission itemFrameBreakingPermission;
@@ -66,11 +66,15 @@ public class ModConfig {
     private boolean useCron = false;
     private String cronExpression = null;
     private CronParser cronParser = null;
+    private boolean useVaultCron = false;
+    private String vaultCronExpression = null;
+    private CronParser vaultCronParser = null;
 
     // resetTimeMs semantics:
     // - If useCron == false: fixed interval in milliseconds (e.g., 7 days).
     // - If useCron == true: milliseconds until the next scheduled cron firing (nextValidTime - now).
     private long resetTimeMs;
+    private long vaultResetTimeMs;
 
     /**
      * Enum representing who can break chests with loot tables.
@@ -115,6 +119,8 @@ public class ModConfig {
 
         long timeValue = DEFAULT_RESET_TIME_VALUE;
         String timeUnit = DEFAULT_RESET_TIME_UNIT;
+        long vaultTimeValue = DEFAULT_RESET_TIME_VALUE;
+        String vaultTimeUnit = DEFAULT_RESET_TIME_UNIT;
 
         try {
             if (Files.exists(configPath)) {
@@ -127,35 +133,75 @@ public class ModConfig {
                     if (cronParsed) {
                         // cron parsing succeeded and resetTimeMs has been set to next delay
                         LootRestock.LOGGER.info("Using cron schedule '{}' for resets (next in {} ms)", cron, resetTimeMs);
-                        return; // finished loading config, cron is used
                     } else {
                         LootRestock.LOGGER.warn("Cron '{}' present but could not be used; falling back to time value/unit.", cron);
                     }
                 }
 
-                // Cron not present or not usable — fall back to numeric timeValue/timeUnit
-                timeValue = Long.parseLong(config.getProperty(CONFIG_TIME_VALUE_KEY,
-                        String.valueOf(DEFAULT_RESET_TIME_VALUE)));
-                timeUnit = config.getProperty(CONFIG_TIME_UNIT_KEY, DEFAULT_RESET_TIME_UNIT).toLowerCase();
+                if (!useCron) {
+                    // Cron not present or not usable — fall back to numeric timeValue/timeUnit
+                    timeValue = Long.parseLong(config.getProperty(CONFIG_TIME_VALUE_KEY,
+                            String.valueOf(DEFAULT_RESET_TIME_VALUE)));
+                    timeUnit = config.getProperty(CONFIG_TIME_UNIT_KEY, DEFAULT_RESET_TIME_UNIT).toLowerCase();
 
-                if (timeValue <= 0) {
-                    throw new IllegalArgumentException(CONFIG_TIME_VALUE_KEY + " must be greater than 0");
+                    if (timeValue <= 0) {
+                        throw new IllegalArgumentException(CONFIG_TIME_VALUE_KEY + " must be greater than 0");
+                    }
+                }
+
+                String vaultCron = config.getProperty(CONFIG_VAULT_CRON_KEY, "").trim();
+                if (!vaultCron.isEmpty()) {
+                    boolean cronParsed = tryUseVaultCron(vaultCron);
+                    if (cronParsed) {
+                        LootRestock.LOGGER.info("Using cron schedule '{}' for vault resets (next in {} ms)",
+                                vaultCron, vaultResetTimeMs);
+                    } else {
+                        LootRestock.LOGGER.warn("Vault cron '{}' present but could not be used; falling back to time value/unit.",
+                                vaultCron);
+                    }
+                }
+
+                if (!useVaultCron) {
+                    vaultTimeValue = Long.parseLong(config.getProperty(CONFIG_VAULT_TIME_VALUE_KEY,
+                            String.valueOf(DEFAULT_RESET_TIME_VALUE)));
+                    vaultTimeUnit = config.getProperty(CONFIG_VAULT_TIME_UNIT_KEY, DEFAULT_RESET_TIME_UNIT).toLowerCase();
+
+                    if (vaultTimeValue <= 0) {
+                        throw new IllegalArgumentException(CONFIG_VAULT_TIME_VALUE_KEY + " must be greater than 0");
+                    }
                 }
             } else {
                 createDefaultConfig(config, configPath);
             }
-        } catch (IOException | NumberFormatException e) {
+        } catch (IOException | IllegalArgumentException e) {
             LootRestock.LOGGER.warn("Failed to load or parse config. Using defaults: {} {}",
                     DEFAULT_RESET_TIME_VALUE, DEFAULT_RESET_TIME_UNIT, e);
             timeValue = DEFAULT_RESET_TIME_VALUE;
             timeUnit = DEFAULT_RESET_TIME_UNIT;
+            vaultTimeValue = DEFAULT_RESET_TIME_VALUE;
+            vaultTimeUnit = DEFAULT_RESET_TIME_UNIT;
+            useCron = false;
+            cronExpression = null;
+            cronParser = null;
+            useVaultCron = false;
+            vaultCronExpression = null;
+            vaultCronParser = null;
         }
 
-        // Convert numeric interval to milliseconds
-        resetTimeMs = convertToMilliseconds(timeValue, timeUnit);
-        useCron = false;
-        cronExpression = null;
-        LootRestock.LOGGER.info("Chest reset time set to {} {} ({} ms)", timeValue, timeUnit, resetTimeMs);
+        if (!useCron) {
+            resetTimeMs = convertToMilliseconds(timeValue, timeUnit);
+            cronExpression = null;
+            cronParser = null;
+            LootRestock.LOGGER.info("Chest reset time set to {} {} ({} ms)", timeValue, timeUnit, resetTimeMs);
+        }
+
+        if (!useVaultCron) {
+            vaultResetTimeMs = convertToMilliseconds(vaultTimeValue, vaultTimeUnit);
+            vaultCronExpression = null;
+            vaultCronParser = null;
+            LootRestock.LOGGER.info("Vault reset time set to {} {} ({} ms)",
+                    vaultTimeValue, vaultTimeUnit, vaultResetTimeMs);
+        }
     }
 
     private void loadExistingConfig(Properties config, Path configPath) throws IOException {
@@ -174,6 +220,10 @@ public class ModConfig {
                     config.getProperty(CONFIG_INCLUDE_ITEM_FRAMES_KEY,
                             String.valueOf(DEFAULT_INCLUDE_ITEM_FRAMES))
             );
+            includeVaults = Boolean.parseBoolean(
+                    config.getProperty(CONFIG_INCLUDE_VAULTS_KEY,
+                            String.valueOf(DEFAULT_INCLUDE_VAULTS))
+            );
             chestBreakingPermission = ChestBreakingPermission.fromString(
                     config.getProperty(CONFIG_ALLOW_CHEST_BREAKING_KEY,
                             DEFAULT_CHEST_BREAKING.toString())
@@ -189,9 +239,16 @@ public class ModConfig {
                     config.getProperty(CONFIG_TIME_UNIT_KEY));
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_CRON_KEY,
                     config.getProperty(CONFIG_CRON_KEY));
+            LootRestock.LOGGER.info("'{}' = {}", CONFIG_VAULT_TIME_VALUE_KEY,
+                    config.getProperty(CONFIG_VAULT_TIME_VALUE_KEY));
+            LootRestock.LOGGER.info("'{}' = {}", CONFIG_VAULT_TIME_UNIT_KEY,
+                    config.getProperty(CONFIG_VAULT_TIME_UNIT_KEY));
+            LootRestock.LOGGER.info("'{}' = {}", CONFIG_VAULT_CRON_KEY,
+                    config.getProperty(CONFIG_VAULT_CRON_KEY));
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ONLY_RESET_WHEN_EMPTY_KEY, onlyResetWhenEmpty);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_INCLUDE_BARRELS_KEY, includeBarrels);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_INCLUDE_ITEM_FRAMES_KEY, includeItemFrames);
+            LootRestock.LOGGER.info("'{}' = {}", CONFIG_INCLUDE_VAULTS_KEY, includeVaults);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ALLOW_CHEST_BREAKING_KEY, chestBreakingPermission);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ALLOW_ITEM_FRAME_BREAKING_KEY, itemFrameBreakingPermission);
         }
@@ -226,6 +283,18 @@ public class ModConfig {
             sb.append("#   \"0 0 1 * *\"     - Monthly on the 1st at midnight\n");
             sb.append(CONFIG_CRON_KEY).append("=\n");
             sb.append("\n");
+            sb.append("# ==================== VAULT RESET TIMING ====================\n");
+            sb.append("# How often should trial chamber vaults become available to the same player again?\n");
+            sb.append("# This uses its own timer and does not affect loot container reset timing.\n");
+            sb.append(CONFIG_VAULT_TIME_VALUE_KEY).append("=").append(DEFAULT_RESET_TIME_VALUE).append("\n");
+            sb.append("# \n");
+            sb.append("# Vault reset time unit (seconds, minutes, hours, days)\n");
+            sb.append(CONFIG_VAULT_TIME_UNIT_KEY).append("=").append(DEFAULT_RESET_TIME_UNIT).append("\n");
+            sb.append("# \n");
+            sb.append("# Advanced: Cron expression for scheduled vault resets (optional)\n");
+            sb.append("# If set, this takes precedence over vault_reset_time_value/vault_reset_time_unit\n");
+            sb.append(CONFIG_VAULT_CRON_KEY).append("=\n");
+            sb.append("\n");
             sb.append("# ==================== RESET BEHAVIOR ====================\n");
             sb.append("# Only reset containers when they are completely empty?\n");
             sb.append("# If true, containers with any items left will not reset\n");
@@ -242,6 +311,11 @@ public class ModConfig {
             sb.append("# If true, item frames with an item will respawn that item after reset, e.g. Elytras in End Cities\n");
             sb.append("# If false, item frames are ignored\n");
             sb.append(CONFIG_INCLUDE_ITEM_FRAMES_KEY).append("=").append(DEFAULT_INCLUDE_ITEM_FRAMES).append("\n");
+            sb.append("# \n");
+            sb.append("# Should trial chamber vaults become reusable by the same player after the vault reset interval?\n");
+            sb.append("# If true, tracked vaults remove individual rewarded-player UUIDs after the vault reset timer\n");
+            sb.append("# If false, vaults keep vanilla once-per-player behavior\n");
+            sb.append(CONFIG_INCLUDE_VAULTS_KEY).append("=").append(DEFAULT_INCLUDE_VAULTS).append("\n");
             sb.append("\n");
             sb.append("# ==================== PROTECTION ====================\n");
             sb.append("# Who can break loot containers?\n");
@@ -264,10 +338,15 @@ public class ModConfig {
         onlyResetWhenEmpty = DEFAULT_ONLY_RESET_WHEN_EMPTY;
         includeBarrels = DEFAULT_INCLUDE_BARRELS;
         includeItemFrames = DEFAULT_INCLUDE_ITEM_FRAMES;
+        includeVaults = DEFAULT_INCLUDE_VAULTS;
         chestBreakingPermission = DEFAULT_CHEST_BREAKING;
         itemFrameBreakingPermission = DEFAULT_CHEST_BREAKING;
         useCron = false;
         cronExpression = null;
+        cronParser = null;
+        useVaultCron = false;
+        vaultCronExpression = null;
+        vaultCronParser = null;
     }
 
     /**
@@ -300,6 +379,29 @@ public class ModConfig {
         }
     }
 
+    private boolean tryUseVaultCron(String cron) {
+        if (cron == null || cron.trim().isEmpty()) return false;
+
+        try {
+            this.vaultCronExpression = cron.trim();
+            this.vaultCronParser = new CronParser(this.vaultCronExpression);
+
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime nextExecution = this.vaultCronParser.getNextExecution(now);
+
+            long delay = Duration.between(now, nextExecution).getSeconds() * 1000;
+
+            this.useVaultCron = true;
+            this.vaultCronExpression = cron;
+            this.vaultResetTimeMs = delay;
+            return true;
+        } catch (Exception e) {
+            LootRestock.LOGGER.warn("Unexpected error while trying to parse vault cron expression '{}': {}",
+                    cron, e.toString());
+            return false;
+        }
+    }
+
     private long convertToMilliseconds(long timeValue, String timeUnit) {
         return switch (timeUnit) {
             case "seconds" -> timeValue * 1000L;
@@ -319,6 +421,10 @@ public class ModConfig {
 
     public boolean includeItemFrames() {
         return includeItemFrames;
+    }
+
+    public boolean includeVaults() {
+        return includeVaults;
     }
 
     public boolean onlyResetWhenEmpty() {
@@ -358,6 +464,18 @@ public class ModConfig {
         return cronParser;
     }
 
+    public boolean isVaultCronUsed() {
+        return useVaultCron;
+    }
+
+    public String getVaultCronExpression() {
+        return vaultCronExpression;
+    }
+
+    public CronParser getVaultCronParser() {
+        return vaultCronParser;
+    }
+
     /**
      * Returns the configured reset time in milliseconds.
      * - If cron is used: milliseconds until the next scheduled cron fire.
@@ -365,5 +483,9 @@ public class ModConfig {
      */
     public long getResetTimeMs() {
         return resetTimeMs;
+    }
+
+    public long getVaultResetTimeMs() {
+        return vaultResetTimeMs;
     }
 }

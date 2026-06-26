@@ -160,6 +160,17 @@ public class ChestDataManager {
         return world.dimension().identifier() + ":item_frame:" + entityUuid;
     }
 
+    /**
+     * Creates a unique key for a trial chamber vault in the world.
+     *
+     * @param world the world the vault is in
+     * @param pos the block position of the vault
+     * @return a unique string key
+     */
+    public static String createVaultKey(Level world, BlockPos pos) {
+        return world.dimension().identifier().toString() + ":vault:" + pos.toShortString();
+    }
+
 
     /**
      * Checks if a block-based chest is being tracked.
@@ -194,6 +205,18 @@ public class ChestDataManager {
      */
     public boolean isItemFrameTracked(Level world, String entityUuid) {
         String key = createItemFrameKey(world, entityUuid);
+        return trackedChests.containsKey(key);
+    }
+
+    /**
+     * Checks if a trial chamber vault is being tracked.
+     *
+     * @param world the world the vault is in
+     * @param pos the block position of the vault
+     * @return true if the vault is tracked, false otherwise
+     */
+    public boolean isVaultTracked(Level world, BlockPos pos) {
+        String key = createVaultKey(world, pos);
         return trackedChests.containsKey(key);
     }
 }

@@ -21,6 +21,7 @@ import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
+import net.minecraft.world.level.block.entity.vault.VaultBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.HitResult;
 import org.oldskooler.lootrestock.config.ModConfig;
@@ -202,6 +203,11 @@ public class LootRestock implements ModInitializer {
                 interactionHandler.handleChestInteraction(
                         world, pos, (RandomizableContainerBlockEntity) blockEntity
                 );
+            }
+        } else if (config.includeVaults()) {
+            BlockEntity blockEntity = world.getBlockEntity(pos);
+            if (blockEntity instanceof VaultBlockEntity vault) {
+                interactionHandler.handleVaultInteraction(world, pos, vault);
             }
         }
     }
