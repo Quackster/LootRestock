@@ -4,8 +4,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -75,5 +77,21 @@ public class EntitySearchUtil {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    /**
+     * Finds item frames whose support block is the provided position.
+     *
+     * @param world the world to search in
+     * @param supportPos the block position item frames are attached to
+     * @return item frames attached to the support block
+     */
+    public static List<ItemFrame> findItemFramesAttachedTo(Level world, BlockPos supportPos) {
+        AABB searchBox = new AABB(supportPos).inflate(1);
+
+        return world.getEntitiesOfClass(ItemFrame.class, searchBox,
+                itemFrame -> itemFrame.blockPosition()
+                        .relative(itemFrame.getDirection().getOpposite())
+                        .equals(supportPos));
     }
 }

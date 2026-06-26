@@ -35,6 +35,8 @@ reset_time_unit=days
 only_reset_when_empty=true
 include_barrels=false
 include_item_frames=false
+allow_chest_breaking=op_only
+allow_item_frame_breaking=op_only
 ```
 
 - `reset_time_value`: Number of time units before a chest is eligible for reset
@@ -44,6 +46,8 @@ include_item_frames=false
   - `false`: Chests will reset regardless of contents (after the cooldown)
 - `include_barrels`: Whether barrel loot should get reset (default value: `false`)
 - `include_item_frames`: Whether item frame contents should respawn after the reset interval (default value: `false`)
+- `allow_chest_breaking`: Who can break tracked loot containers and chest minecarts: `op_only`, `anyone`, or `no_one` (default value: `op_only`)
+- `allow_item_frame_breaking`: Who can break tracked item frames and their supporting blocks: `op_only`, `anyone`, or `no_one` (default value: `op_only`)
 
 ## Data Persistence
 

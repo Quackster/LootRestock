@@ -30,6 +30,7 @@ import java.util.Properties;
  *   <li><b>include_barrels</b>: true/false (default: false)</li>
  *   <li><b>include_item_frames</b>: true/false (default: false)</li>
  *   <li><b>allow_chest_breaking</b>: Who can break chests - "op_only", "anyone", or "no_one" (default: op_only)</li>
+ *   <li><b>allow_item_frame_breaking</b>: Who can break tracked item frames - "op_only", "anyone", or "no_one" (default: op_only)</li>
  * </ul>
  *
  * Notes:
@@ -46,6 +47,7 @@ public class ModConfig {
     private static final String CONFIG_INCLUDE_BARRELS_KEY = "include_barrels";
     private static final String CONFIG_INCLUDE_ITEM_FRAMES_KEY = "include_item_frames";
     private static final String CONFIG_ALLOW_CHEST_BREAKING_KEY = "allow_chest_breaking";
+    private static final String CONFIG_ALLOW_ITEM_FRAME_BREAKING_KEY = "allow_item_frame_breaking";
 
     private static final long DEFAULT_RESET_TIME_VALUE = 7;
     private static final String DEFAULT_RESET_TIME_UNIT = "days";
@@ -58,6 +60,7 @@ public class ModConfig {
     private boolean includeItemFrames;
     private boolean onlyResetWhenEmpty;
     private ChestBreakingPermission chestBreakingPermission;
+    private ChestBreakingPermission itemFrameBreakingPermission;
 
     // If cron is used, this flag is true and cronExpression contains the raw expression.
     private boolean useCron = false;
@@ -175,6 +178,10 @@ public class ModConfig {
                     config.getProperty(CONFIG_ALLOW_CHEST_BREAKING_KEY,
                             DEFAULT_CHEST_BREAKING.toString())
             );
+            itemFrameBreakingPermission = ChestBreakingPermission.fromString(
+                    config.getProperty(CONFIG_ALLOW_ITEM_FRAME_BREAKING_KEY,
+                            chestBreakingPermission.toString())
+            );
 
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_TIME_VALUE_KEY,
                     config.getProperty(CONFIG_TIME_VALUE_KEY));
@@ -186,6 +193,7 @@ public class ModConfig {
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_INCLUDE_BARRELS_KEY, includeBarrels);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_INCLUDE_ITEM_FRAMES_KEY, includeItemFrames);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ALLOW_CHEST_BREAKING_KEY, chestBreakingPermission);
+            LootRestock.LOGGER.info("'{}' = {}", CONFIG_ALLOW_ITEM_FRAME_BREAKING_KEY, itemFrameBreakingPermission);
         }
     }
 
@@ -242,6 +250,13 @@ public class ModConfig {
             sb.append("#   anyone   - Anyone can break chests\n");
             sb.append("#   no_one   - No one can break chests (fully protected)\n");
             sb.append(CONFIG_ALLOW_CHEST_BREAKING_KEY).append("=").append(DEFAULT_CHEST_BREAKING.toString()).append("\n");
+            sb.append("# \n");
+            sb.append("# Who can break tracked item frames and their supporting blocks?\n");
+            sb.append("# Options:\n");
+            sb.append("#   op_only  - Only server operators can break tracked item frames (default)\n");
+            sb.append("#   anyone   - Anyone can break tracked item frames\n");
+            sb.append("#   no_one   - No one can break tracked item frames (fully protected)\n");
+            sb.append(CONFIG_ALLOW_ITEM_FRAME_BREAKING_KEY).append("=").append(DEFAULT_CHEST_BREAKING.toString()).append("\n");
 
             out.write(sb.toString().getBytes());
         }
@@ -250,6 +265,7 @@ public class ModConfig {
         includeBarrels = DEFAULT_INCLUDE_BARRELS;
         includeItemFrames = DEFAULT_INCLUDE_ITEM_FRAMES;
         chestBreakingPermission = DEFAULT_CHEST_BREAKING;
+        itemFrameBreakingPermission = DEFAULT_CHEST_BREAKING;
         useCron = false;
         cronExpression = null;
     }
@@ -314,6 +330,13 @@ public class ModConfig {
      */
     public ChestBreakingPermission getChestBreakingPermission() {
         return chestBreakingPermission;
+    }
+
+    /**
+     * Returns the item frame breaking permission setting.
+     */
+    public ChestBreakingPermission getItemFrameBreakingPermission() {
+        return itemFrameBreakingPermission;
     }
 
     /**

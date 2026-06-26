@@ -13,6 +13,7 @@ import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -26,6 +27,7 @@ import org.oldskooler.lootrestock.config.ModConfig;
 import org.oldskooler.lootrestock.data.ChestDataManager;
 import org.oldskooler.lootrestock.handler.ChestInteractionHandler;
 import org.oldskooler.lootrestock.handler.ChestResetHandler;
+import org.oldskooler.lootrestock.util.EntitySearchUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,10 +88,18 @@ public class LootRestock implements ModInitializer {
 
         // Register block destroy interaction callback
         PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> {
+            if (!world.isClientSide() && isProtectedItemFrameSupport(world, player, pos)) {
+                return false;
+            }
+
             if (!world.isClientSide() && blockEntity instanceof RandomizableContainerBlockEntity chestBlockEntity) {
                 boolean isTracked = this.dataManager.isTracked(world, pos);
                 
                 if (isTracked || chestBlockEntity.getLootTable() != null) {
+                    if (canBreak(player, config.getChestBreakingPermission())) {
+                        return true;
+                    }
+
                     // Add it to tracked list if not already
                     if (!isTracked) {
                         registerBlockInteraction(world, pos);
@@ -113,6 +123,10 @@ public class LootRestock implements ModInitializer {
                     boolean isEntityTracked = this.dataManager.isEntityTracked(world, entity.getStringUUID());
 
                     if (isEntityTracked || chestMinecart.getContainerLootTable() != null) {
+                        if (canBreak(player, config.getChestBreakingPermission())) {
+                            return InteractionResult.PASS;
+                        }
+
                         // Add it to tracked list if not already
                         if (!isEntityTracked) {
                             registerEntityInteraction(world, entity);
@@ -129,6 +143,10 @@ public class LootRestock implements ModInitializer {
                     ItemStack heldStack = itemFrame.getItem();
 
                     if (isItemFrameTracked || !heldStack.isEmpty()) {
+                        if (canBreak(player, config.getItemFrameBreakingPermission())) {
+                            return InteractionResult.PASS;
+                        }
+
                         if (!isItemFrameTracked) {
                             registerItemFrameInteraction(world, itemFrame);
                         }
@@ -186,6 +204,24 @@ public class LootRestock implements ModInitializer {
                 );
             }
         }
+    }
+
+    private boolean isProtectedItemFrameSupport(Level world, Player player, BlockPos pos) {
+        if (!config.includeItemFrames() || canBreak(player, config.getItemFrameBreakingPermission())) {
+            return false;
+        }
+
+        return EntitySearchUtil.findItemFramesAttachedTo(world, pos).stream()
+                .anyMatch(itemFrame -> this.dataManager.isItemFrameTracked(world, itemFrame.getStringUUID())
+                        || !itemFrame.getItem().isEmpty());
+    }
+
+    private boolean canBreak(Player player, ModConfig.ChestBreakingPermission permission) {
+        return switch (permission) {
+            case ANYONE -> true;
+            case OP_ONLY -> player.canUseGameMasterBlocks();
+            case NO_ONE -> false;
+        };
     }
 
     private void onServerStart(MinecraftServer server) {
