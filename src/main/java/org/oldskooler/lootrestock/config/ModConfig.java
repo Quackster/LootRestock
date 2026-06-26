@@ -28,6 +28,7 @@ import java.util.Properties;
  *   <li><b>reset_cron</b>: Optional cron expression (e.g. "0 0/30 * * * ?" or standard 5-field "0 0 * * *")</li>
  *   <li><b>only_reset_when_empty</b>: true/false (default: true)</li>
  *   <li><b>include_barrels</b>: true/false (default: false)</li>
+ *   <li><b>include_item_frames</b>: true/false (default: false)</li>
  *   <li><b>allow_chest_breaking</b>: Who can break chests - "op_only", "anyone", or "no_one" (default: op_only)</li>
  * </ul>
  *
@@ -43,15 +44,18 @@ public class ModConfig {
     private static final String CONFIG_CRON_KEY = "reset_cron";
     private static final String CONFIG_ONLY_RESET_WHEN_EMPTY_KEY = "only_reset_when_empty";
     private static final String CONFIG_INCLUDE_BARRELS_KEY = "include_barrels";
+    private static final String CONFIG_INCLUDE_ITEM_FRAMES_KEY = "include_item_frames";
     private static final String CONFIG_ALLOW_CHEST_BREAKING_KEY = "allow_chest_breaking";
 
     private static final long DEFAULT_RESET_TIME_VALUE = 7;
     private static final String DEFAULT_RESET_TIME_UNIT = "days";
     private static final boolean DEFAULT_ONLY_RESET_WHEN_EMPTY = true;
     private static final boolean DEFAULT_INCLUDE_BARRELS = false;
+    private static final boolean DEFAULT_INCLUDE_ITEM_FRAMES = false;
     private static final ChestBreakingPermission DEFAULT_CHEST_BREAKING = ChestBreakingPermission.OP_ONLY;
 
     private boolean includeBarrels;
+    private boolean includeItemFrames;
     private boolean onlyResetWhenEmpty;
     private ChestBreakingPermission chestBreakingPermission;
 
@@ -163,6 +167,10 @@ public class ModConfig {
                     config.getProperty(CONFIG_INCLUDE_BARRELS_KEY,
                             String.valueOf(DEFAULT_INCLUDE_BARRELS))
             );
+            includeItemFrames = Boolean.parseBoolean(
+                    config.getProperty(CONFIG_INCLUDE_ITEM_FRAMES_KEY,
+                            String.valueOf(DEFAULT_INCLUDE_ITEM_FRAMES))
+            );
             chestBreakingPermission = ChestBreakingPermission.fromString(
                     config.getProperty(CONFIG_ALLOW_CHEST_BREAKING_KEY,
                             DEFAULT_CHEST_BREAKING.toString())
@@ -176,6 +184,7 @@ public class ModConfig {
                     config.getProperty(CONFIG_CRON_KEY));
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ONLY_RESET_WHEN_EMPTY_KEY, onlyResetWhenEmpty);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_INCLUDE_BARRELS_KEY, includeBarrels);
+            LootRestock.LOGGER.info("'{}' = {}", CONFIG_INCLUDE_ITEM_FRAMES_KEY, includeItemFrames);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ALLOW_CHEST_BREAKING_KEY, chestBreakingPermission);
         }
     }
@@ -220,6 +229,11 @@ public class ModConfig {
             sb.append("# If true, barrels with loot tables will reset like chests\n");
             sb.append("# If false, only chests will reset\n");
             sb.append(CONFIG_INCLUDE_BARRELS_KEY).append("=").append(DEFAULT_INCLUDE_BARRELS).append("\n");
+            sb.append("# \n");
+            sb.append("# Should item frames be included in the reset system?\n");
+            sb.append("# If true, item frames with an item will respawn that item after reset, e.g. Elytras in End Cities\n");
+            sb.append("# If false, item frames are ignored\n");
+            sb.append(CONFIG_INCLUDE_ITEM_FRAMES_KEY).append("=").append(DEFAULT_INCLUDE_ITEM_FRAMES).append("\n");
             sb.append("\n");
             sb.append("# ==================== PROTECTION ====================\n");
             sb.append("# Who can break loot containers?\n");
@@ -234,6 +248,7 @@ public class ModConfig {
 
         onlyResetWhenEmpty = DEFAULT_ONLY_RESET_WHEN_EMPTY;
         includeBarrels = DEFAULT_INCLUDE_BARRELS;
+        includeItemFrames = DEFAULT_INCLUDE_ITEM_FRAMES;
         chestBreakingPermission = DEFAULT_CHEST_BREAKING;
         useCron = false;
         cronExpression = null;
@@ -284,6 +299,10 @@ public class ModConfig {
 
     public boolean includeBarrels() {
         return includeBarrels;
+    }
+
+    public boolean includeItemFrames() {
+        return includeItemFrames;
     }
 
     public boolean onlyResetWhenEmpty() {

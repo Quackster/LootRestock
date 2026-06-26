@@ -149,6 +149,17 @@ public class ChestDataManager {
         return world.getRegistryKey().getValue() + ":entity:" + entityUuid;
     }
 
+    /**
+     * Creates a unique key for an item frame.
+     *
+     * @param world the world the item frame is in
+     * @param entityUuid the UUID of the item frame
+     * @return a unique string key
+     */
+    public static String createItemFrameKey(World world, String entityUuid) {
+        return world.getRegistryKey().getValue() + ":item_frame:" + entityUuid;
+    }
+
 
     /**
      * Checks if a block-based chest is being tracked.
@@ -171,6 +182,18 @@ public class ChestDataManager {
      */
     public boolean isEntityTracked(World world, String entityUuid) {
         String key = createEntityChestKey(world, entityUuid);
+        return trackedChests.containsKey(key);
+    }
+
+    /**
+     * Checks if an item frame is being tracked.
+     *
+     * @param world the world the item frame is in
+     * @param entityUuid the UUID of the item frame
+     * @return true if the item frame is tracked, false otherwise
+     */
+    public boolean isItemFrameTracked(World world, String entityUuid) {
+        String key = createItemFrameKey(world, entityUuid);
         return trackedChests.containsKey(key);
     }
 }

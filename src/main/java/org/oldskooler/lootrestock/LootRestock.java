@@ -13,7 +13,9 @@ package org.oldskooler.lootrestock;
  import net.minecraft.block.entity.BlockEntity;
  import net.minecraft.block.entity.LootableContainerBlockEntity;
  import net.minecraft.entity.Entity;
+ import net.minecraft.entity.decoration.ItemFrameEntity;
  import net.minecraft.entity.vehicle.ChestMinecartEntity;
+ import net.minecraft.item.ItemStack;
  import net.minecraft.server.MinecraftServer;
  import net.minecraft.util.ActionResult;
  import net.minecraft.util.ItemScatterer;
@@ -106,20 +108,39 @@ public class LootRestock implements ModInitializer {
 
         // Register entity destroy interaction callback
         AttackEntityCallback.EVENT.register((player, world, hand, entity, result) -> {
-            if (!world.isClient() && entity instanceof ChestMinecartEntity chestMinecart) {
-                boolean isEntityTracked = this.dataManager.isEntityTracked(world, entity.getUuidAsString());
-                
-                if (isEntityTracked || chestMinecart.getLootTable() != null) {
-                    // Add it to tracked list if not already
-                    if (!isEntityTracked) {
-                        registerEntityInteraction(world, entity);
-                    }
+            if (!world.isClient()) {
+                if (entity instanceof ChestMinecartEntity chestMinecart) {
+                    boolean isEntityTracked = this.dataManager.isEntityTracked(world, entity.getUuidAsString());
 
-                    // Drop the inventory contents naturally
-                    ItemScatterer.spawn(world, chestMinecart.getBlockPos(), chestMinecart.getInventory());
-                    
-                    // Prevent from actually breaking
-                    return ActionResult.FAIL;
+                    if (isEntityTracked || chestMinecart.getLootTable() != null) {
+                        // Add it to tracked list if not already
+                        if (!isEntityTracked) {
+                            registerEntityInteraction(world, entity);
+                        }
+
+                        // Drop the inventory contents naturally
+                        ItemScatterer.spawn(world, chestMinecart.getBlockPos(), chestMinecart.getInventory());
+
+                        // Prevent from actually breaking
+                        return ActionResult.FAIL;
+                    }
+                } else if (config.includeItemFrames() && entity instanceof ItemFrameEntity itemFrame) {
+                    boolean isItemFrameTracked = this.dataManager.isItemFrameTracked(world, entity.getUuidAsString());
+                    ItemStack heldStack = itemFrame.getHeldItemStack();
+
+                    if (isItemFrameTracked || !heldStack.isEmpty()) {
+                        if (!isItemFrameTracked) {
+                            registerItemFrameInteraction(world, itemFrame);
+                        }
+
+                        if (!heldStack.isEmpty()) {
+                            ItemScatterer.spawn(world, itemFrame.getX(), itemFrame.getY(), itemFrame.getZ(), heldStack.copy());
+                            itemFrame.setHeldItemStack(ItemStack.EMPTY);
+                        }
+
+                        // Keep tracked item frames in place so their item can respawn later
+                        return ActionResult.FAIL;
+                    }
                 }
             }
 
@@ -144,7 +165,13 @@ public class LootRestock implements ModInitializer {
      private void registerEntityInteraction(World world, Entity entity) {
          if (entity instanceof ChestMinecartEntity chestMinecart) {
              interactionHandler.handleMinecartChestInteraction(world, chestMinecart);
+         } else if (config.includeItemFrames() && entity instanceof ItemFrameEntity itemFrame) {
+             interactionHandler.handleItemFrameInteraction(world, itemFrame);
          }
+     }
+
+     private void registerItemFrameInteraction(World world, ItemFrameEntity itemFrame) {
+         interactionHandler.handleItemFrameInteraction(world, itemFrame);
      }
 
      private void registerBlockInteraction(World world, BlockPos pos) {

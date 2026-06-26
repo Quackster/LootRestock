@@ -14,6 +14,7 @@ CurseForge: https://curseforge.com/minecraft/mc-mods/lootrestock
 
 - Tracks every lootable chest opened by players
 - Resets chest contents based on original loot tables only when chunks are loaded
+- Optionally respawns items removed from item frames, such as Elytras in End Cities
 - **Performance-optimized**: Chest resets are processed only when players are nearby and chunks are active
 - Configurable cooldown period using simple time units (e.g. `7 days`, `12 hours`, `30 minutes`)
 - Persists data across server restarts
@@ -33,6 +34,7 @@ reset_time_value=7
 reset_time_unit=days
 only_reset_when_empty=true
 include_barrels=false
+include_item_frames=false
 ```
 
 - `reset_time_value`: Number of time units before a chest is eligible for reset
@@ -41,6 +43,7 @@ include_barrels=false
   - `true`: Chests will reset only if empty (after the cooldown)
   - `false`: Chests will reset regardless of contents (after the cooldown)
 - `include_barrels`: Whether barrel loot should get reset (default value: `false`)
+- `include_item_frames`: Whether item frame contents should respawn after the reset interval (default value: `false`)
 
 ## Data Persistence
 

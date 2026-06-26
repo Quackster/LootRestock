@@ -7,10 +7,15 @@ import net.minecraft.util.math.BlockPos;
 
 /**
  * Serializable class for tracking chest state.
- * Supports both block-based chests (normal chests, barrels) and entity-based chests (minecarts).
+ * Supports block-based chests, entity-based chests, and item frames.
  */
 public class ChestData {
+    public static final String TYPE_BLOCK_CHEST = "block_chest";
+    public static final String TYPE_ENTITY_CHEST = "entity_chest";
+    public static final String TYPE_ITEM_FRAME = "item_frame";
+
     // Common fields
+    String type;
     String worldName;
     int x, y, z;
     String lootTableId;
@@ -18,8 +23,12 @@ public class ChestData {
     long lastLootedTime;
     boolean isEmpty;
 
-    // Entity-based chest fields
+    // Entity-based fields
     String entityUuid;
+
+    // Item frame fields
+    String itemId;
+    int itemCount;
 
     // Transient field for tracking changes
     transient boolean dirty = false;
@@ -30,6 +39,10 @@ public class ChestData {
 
     public Identifier getLootTableIdentifier() {
         return Identifier.of(lootTableId);
+    }
+
+    public Identifier getItemIdentifier() {
+        return Identifier.of(itemId);
     }
 
     /**
@@ -54,7 +67,27 @@ public class ChestData {
      * @return true if this is a minecart chest, false if it's a block-based chest
      */
     public boolean isEntityChest() {
-        return entityUuid != null;
+        return TYPE_ENTITY_CHEST.equals(type) || (type == null && entityUuid != null);
+    }
+
+    /**
+     * Checks if this data represents an item frame.
+     *
+     * @return true if this is an item frame
+     */
+    public boolean isItemFrame() {
+        return TYPE_ITEM_FRAME.equals(type);
+    }
+
+    public String getType() {
+        if (type != null) {
+            return type;
+        }
+        return entityUuid == null ? TYPE_BLOCK_CHEST : TYPE_ENTITY_CHEST;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 
     public String getWorldName() {
@@ -111,6 +144,22 @@ public class ChestData {
 
     public void setLootSeed(long lootSeed) {
         this.lootSeed = lootSeed;
+    }
+
+    public String getItemId() {
+        return itemId;
+    }
+
+    public void setItemId(String itemId) {
+        this.itemId = itemId;
+    }
+
+    public int getItemCount() {
+        return itemCount;
+    }
+
+    public void setItemCount(int itemCount) {
+        this.itemCount = itemCount;
     }
 
     public long getLastLootedTime() {

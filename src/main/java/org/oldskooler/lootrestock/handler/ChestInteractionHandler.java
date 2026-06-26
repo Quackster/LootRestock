@@ -1,7 +1,10 @@
 package org.oldskooler.lootrestock.handler;
 
 import net.minecraft.block.entity.LootableContainerBlockEntity;
+import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.entity.vehicle.ChestMinecartEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.oldskooler.lootrestock.data.ChestData;
@@ -34,6 +37,7 @@ public class ChestInteractionHandler {
         String chestKey = ChestDataManager.createChestKey(world, pos);
         ChestData data = dataManager.getOrCreate(chestKey);
 
+        data.setType(ChestData.TYPE_BLOCK_CHEST);
         data.setWorldName(world.getRegistryKey().getValue().toString());
         data.setX(pos.getX());
         data.setY(pos.getY());
@@ -61,6 +65,7 @@ public class ChestInteractionHandler {
         String chestKey = ChestDataManager.createEntityChestKey(world, chest.getUuidAsString());
         ChestData data = dataManager.getOrCreate(chestKey);
 
+        data.setType(ChestData.TYPE_ENTITY_CHEST);
         data.setWorldName(world.getRegistryKey().getValue().toString());
         data.setEntityUuid(chest.getUuidAsString());
         data.setLootTableId(chest.getLootTable().getValue().toString());
@@ -69,6 +74,36 @@ public class ChestInteractionHandler {
         data.setY(chest.getBlockPos().getY());
         data.setZ(chest.getBlockPos().getZ());
         data.setEmpty(chest.isEmpty());
+        data.setDirty(true);
+    }
+
+    /**
+     * Handles interaction with an item frame.
+     * If the frame contains an item, it is added to the tracked map so that
+     * item can be restored after the reset interval.
+     *
+     * @param world the world the item frame is in
+     * @param itemFrame the ItemFrameEntity being interacted with
+     */
+    public void handleItemFrameInteraction(World world, ItemFrameEntity itemFrame) {
+        ItemStack heldStack = itemFrame.getHeldItemStack();
+        if (heldStack.isEmpty()) {
+            return;
+        }
+
+        BlockPos pos = itemFrame.getBlockPos();
+        String frameKey = ChestDataManager.createItemFrameKey(world, itemFrame.getUuidAsString());
+        ChestData data = dataManager.getOrCreate(frameKey);
+
+        data.setType(ChestData.TYPE_ITEM_FRAME);
+        data.setWorldName(world.getRegistryKey().getValue().toString());
+        data.setEntityUuid(itemFrame.getUuidAsString());
+        data.setX(pos.getX());
+        data.setY(pos.getY());
+        data.setZ(pos.getZ());
+        data.setItemId(Registries.ITEM.getId(heldStack.getItem()).toString());
+        data.setItemCount(heldStack.getCount());
+        data.setEmpty(false);
         data.setDirty(true);
     }
 }

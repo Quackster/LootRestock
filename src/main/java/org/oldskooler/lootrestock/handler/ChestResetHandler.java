@@ -2,7 +2,11 @@ package org.oldskooler.lootrestock.handler;
 
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.LootableContainerBlockEntity;
+import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.entity.vehicle.ChestMinecartEntity;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
@@ -36,10 +40,10 @@ public class ChestResetHandler {
     }
 
     /**
-     * Iterates through all tracked chests and resets those whose cooldown period has elapsed.
-     * Supports both block-based and entity-based chests. Only chests that are empty
+     * Iterates through all tracked loot sources and resets those whose cooldown period has elapsed.
+     * Supports block-based chests, entity-based chests, and item frames. Only entries that are empty
      * (if configured) and have been inactive longer than the reset interval are reset.
-     * Invalid or missing chests are automatically removed from tracking.
+     * Invalid or missing entries are automatically removed from tracking.
      *
      * @param server the MinecraftServer instance
      */
@@ -71,12 +75,14 @@ public class ChestResetHandler {
             if (!world.isChunkLoaded(
                     ChunkSectionPos.getSectionCoord(pos.getX()),
                     ChunkSectionPos.getSectionCoord(pos.getZ()))) {
-                LootRestock.LOGGER.debug("Chunk not loaded for chest at {}. Skipping reset.", pos);
+                LootRestock.LOGGER.debug("Chunk not loaded for tracked loot source at {}. Skipping reset.", pos);
                 continue;
             }
 
             if (data.isEntityChest()) {
                 needsSave |= processEntityChest(data, world, currentTime, iterator, resetCount);
+            } else if (data.isItemFrame()) {
+                needsSave |= processItemFrame(data, world, currentTime, iterator, resetCount);
             } else {
                 needsSave |= processBlockChest(data, world, currentTime, iterator, resetCount);
             }
@@ -94,7 +100,7 @@ public class ChestResetHandler {
         }
 
         if (resetCount.get() > 0) {
-            LootRestock.LOGGER.info("Reset {} chests", resetCount.get());
+            LootRestock.LOGGER.info("Reset {} tracked loot sources", resetCount.get());
         }
     }
 
@@ -114,6 +120,31 @@ public class ChestResetHandler {
             if (resetChestEntity(entity, data)) {
                 resetCount.incrementAndGet();
                 data.setEmpty(entity.isEmpty());
+                data.setLastLootedTime(currentTime);
+                data.setDirty(true);
+            }
+        }
+
+        return false;
+    }
+
+    private boolean processItemFrame(ChestData data, ServerWorld world, long currentTime,
+                                     Iterator<Map.Entry<String, ChestData>> iterator, AtomicInteger resetCount) {
+        ItemFrameEntity itemFrame = EntitySearchUtil.findItemFrameByUuid(
+                world, data.getEntityUuid(), data.getBlockPos()
+        );
+
+        if (itemFrame == null) {
+            LootRestock.LOGGER.info("Removing tracked item frame: not found {}", data.getEntityUuid());
+            iterator.remove();
+            return true;
+        }
+
+        boolean isEmpty = itemFrame.getHeldItemStack().isEmpty();
+        if (shouldReset(isEmpty, currentTime, data.getLastLootedTime())) {
+            if (resetItemFrame(itemFrame, data)) {
+                resetCount.incrementAndGet();
+                data.setEmpty(itemFrame.getHeldItemStack().isEmpty());
                 data.setLastLootedTime(currentTime);
                 data.setDirty(true);
             }
@@ -240,5 +271,28 @@ public class ChestResetHandler {
             LootRestock.LOGGER.error("Failed to reset chest: {}", e.getMessage());
         }
         return false;
+    }
+
+    /**
+     * Restores the original tracked item to an item frame.
+     *
+     * @param itemFrame the ItemFrameEntity to reset
+     * @param data the stored item frame data
+     * @return true if the item frame was successfully reset, false otherwise
+     */
+    private boolean resetItemFrame(ItemFrameEntity itemFrame, ChestData data) {
+        try {
+            Item item = Registries.ITEM.getOptionalValue(data.getItemIdentifier())
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown item id " + data.getItemId()));
+            ItemStack stack = new ItemStack(item, Math.max(1, data.getItemCount()));
+            itemFrame.setHeldItemStack(stack);
+
+            LootRestock.LOGGER.info("Reset item frame at {} in world {}",
+                    itemFrame.getBlockPos(), data.getWorldName());
+            return true;
+        } catch (Exception e) {
+            LootRestock.LOGGER.error("Failed to reset item frame: {}", e.getMessage());
+            return false;
+        }
     }
 }
