@@ -1,10 +1,10 @@
 package org.oldskooler.lootrestock.util;
 
-import net.minecraft.entity.vehicle.ChestMinecartEntity;
-import net.minecraft.entity.decoration.ItemFrameEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
+import net.minecraft.world.phys.AABB;
 
 import java.util.UUID;
 
@@ -15,36 +15,36 @@ public class EntitySearchUtil {
     private static final int DEFAULT_SEARCH_DISTANCE = 2;
 
     /**
-     * Attempts to locate a ChestMinecartEntity in the given world by its UUID.
+     * Attempts to locate a MinecartChest in the given world by its UUID.
      * Searches within a bounding box around the given block position to limit the area.
      *
      * @param world the server world to search in
      * @param uuidStr the UUID string of the chest minecart to find
      * @param pos the position around which to search
-     * @return the matching ChestMinecartEntity, or null if not found or UUID is invalid
+     * @return the matching MinecartChest, or null if not found or UUID is invalid
      */
-    public static ChestMinecartEntity findMinecartChestByUuid(ServerWorld world, String uuidStr, BlockPos pos) {
+    public static MinecartChest findMinecartChestByUuid(ServerLevel world, String uuidStr, BlockPos pos) {
         return findMinecartChestByUuid(world, uuidStr, pos, DEFAULT_SEARCH_DISTANCE);
     }
 
     /**
-     * Attempts to locate a ChestMinecartEntity in the given world by its UUID.
+     * Attempts to locate a MinecartChest in the given world by its UUID.
      * Searches within a bounding box around the given block position to limit the area.
      *
      * @param world the server world to search in
      * @param uuidStr the UUID string of the chest minecart to find
      * @param pos the position around which to search
      * @param searchDistance the distance in blocks to search around the position
-     * @return the matching ChestMinecartEntity, or null if not found or UUID is invalid
+     * @return the matching MinecartChest, or null if not found or UUID is invalid
      */
-    public static ChestMinecartEntity findMinecartChestByUuid(ServerWorld world, String uuidStr,
-                                                              BlockPos pos, int searchDistance) {
+    public static MinecartChest findMinecartChestByUuid(ServerLevel world, String uuidStr,
+                                                        BlockPos pos, int searchDistance) {
         try {
-            Box searchBox = new Box(pos).expand(searchDistance);
+            AABB searchBox = new AABB(pos).inflate(searchDistance);
             UUID uuid = UUID.fromString(uuidStr);
 
-            return world.getEntitiesByClass(ChestMinecartEntity.class, searchBox,
-                            entity -> entity.getUuid().equals(uuid))
+            return world.getEntitiesOfClass(MinecartChest.class, searchBox,
+                            entity -> entity.getUUID().equals(uuid))
                     .stream()
                     .findFirst()
                     .orElse(null);
@@ -62,13 +62,13 @@ public class EntitySearchUtil {
      * @param pos the position around which to search
      * @return the matching ItemFrameEntity, or null if not found or UUID is invalid
      */
-    public static ItemFrameEntity findItemFrameByUuid(ServerWorld world, String uuidStr, BlockPos pos) {
+    public static ItemFrame findItemFrameByUuid(ServerLevel world, String uuidStr, BlockPos pos) {
         try {
-            Box searchBox = new Box(pos).expand(DEFAULT_SEARCH_DISTANCE);
+            AABB searchBox = new AABB(pos).inflate(DEFAULT_SEARCH_DISTANCE);
             UUID uuid = UUID.fromString(uuidStr);
 
-            return world.getEntitiesByClass(ItemFrameEntity.class, searchBox,
-                            entity -> entity.getUuid().equals(uuid))
+            return world.getEntitiesOfClass(ItemFrame.class, searchBox,
+                            entity -> entity.getUUID().equals(uuid))
                     .stream()
                     .findFirst()
                     .orElse(null);
