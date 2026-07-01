@@ -29,6 +29,8 @@ import java.util.Properties;
  *   <li><b>only_reset_when_empty</b>: true/false (default: true)</li>
  *   <li><b>include_barrels</b>: true/false (default: false)</li>
  *   <li><b>allow_chest_breaking</b>: Who can break chests - "op_only", "anyone", or "no_one" (default: op_only)</li>
+ *   <li><b>require_crouch_to_break</b>: true/false (default: true)</li>
+ *   <li><b>crouch_break_seconds</b>: Seconds players must keep breaking while crouched (default: 4)</li>
  * </ul>
  *
  * Notes:
@@ -44,16 +46,22 @@ public class ModConfig {
     private static final String CONFIG_ONLY_RESET_WHEN_EMPTY_KEY = "only_reset_when_empty";
     private static final String CONFIG_INCLUDE_BARRELS_KEY = "include_barrels";
     private static final String CONFIG_ALLOW_CHEST_BREAKING_KEY = "allow_chest_breaking";
+    private static final String CONFIG_REQUIRE_CROUCH_TO_BREAK_KEY = "require_crouch_to_break";
+    private static final String CONFIG_CROUCH_BREAK_SECONDS_KEY = "crouch_break_seconds";
 
     private static final long DEFAULT_RESET_TIME_VALUE = 7;
     private static final String DEFAULT_RESET_TIME_UNIT = "days";
     private static final boolean DEFAULT_ONLY_RESET_WHEN_EMPTY = true;
     private static final boolean DEFAULT_INCLUDE_BARRELS = false;
     private static final ChestBreakingPermission DEFAULT_CHEST_BREAKING = ChestBreakingPermission.OP_ONLY;
+    private static final boolean DEFAULT_REQUIRE_CROUCH_TO_BREAK = true;
+    private static final long DEFAULT_CROUCH_BREAK_SECONDS = 4;
 
     private boolean includeBarrels;
     private boolean onlyResetWhenEmpty;
     private ChestBreakingPermission chestBreakingPermission;
+    private boolean requireCrouchToBreak;
+    private long crouchBreakMs;
 
     // If cron is used, this flag is true and cronExpression contains the raw expression.
     private boolean useCron = false;
@@ -167,6 +175,12 @@ public class ModConfig {
                     config.getProperty(CONFIG_ALLOW_CHEST_BREAKING_KEY,
                             DEFAULT_CHEST_BREAKING.toString())
             );
+            requireCrouchToBreak = Boolean.parseBoolean(
+                    config.getProperty(CONFIG_REQUIRE_CROUCH_TO_BREAK_KEY,
+                            String.valueOf(DEFAULT_REQUIRE_CROUCH_TO_BREAK))
+            );
+            crouchBreakMs = parseCrouchBreakMs(config.getProperty(CONFIG_CROUCH_BREAK_SECONDS_KEY,
+                    String.valueOf(DEFAULT_CROUCH_BREAK_SECONDS)));
 
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_TIME_VALUE_KEY,
                     config.getProperty(CONFIG_TIME_VALUE_KEY));
@@ -177,6 +191,8 @@ public class ModConfig {
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ONLY_RESET_WHEN_EMPTY_KEY, onlyResetWhenEmpty);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_INCLUDE_BARRELS_KEY, includeBarrels);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ALLOW_CHEST_BREAKING_KEY, chestBreakingPermission);
+            LootRestock.LOGGER.info("'{}' = {}", CONFIG_REQUIRE_CROUCH_TO_BREAK_KEY, requireCrouchToBreak);
+            LootRestock.LOGGER.info("'{}' = {} ms", CONFIG_CROUCH_BREAK_SECONDS_KEY, crouchBreakMs);
         }
     }
 
@@ -228,6 +244,13 @@ public class ModConfig {
             sb.append("#   anyone   - Anyone can break chests\n");
             sb.append("#   no_one   - No one can break chests (fully protected)\n");
             sb.append(CONFIG_ALLOW_CHEST_BREAKING_KEY).append("=").append(DEFAULT_CHEST_BREAKING.toString()).append("\n");
+            sb.append("# \n");
+            sb.append("# Require players with break permission to crouch before removing a loot container?\n");
+            sb.append(CONFIG_REQUIRE_CROUCH_TO_BREAK_KEY).append("=").append(DEFAULT_REQUIRE_CROUCH_TO_BREAK).append("\n");
+            sb.append("# \n");
+            sb.append("# How long must a permitted player keep breaking while crouched?\n");
+            sb.append("# This makes accidental removal harder. Set to 0 for normal break speed.\n");
+            sb.append(CONFIG_CROUCH_BREAK_SECONDS_KEY).append("=").append(DEFAULT_CROUCH_BREAK_SECONDS).append("\n");
 
             out.write(sb.toString().getBytes());
         }
@@ -235,8 +258,24 @@ public class ModConfig {
         onlyResetWhenEmpty = DEFAULT_ONLY_RESET_WHEN_EMPTY;
         includeBarrels = DEFAULT_INCLUDE_BARRELS;
         chestBreakingPermission = DEFAULT_CHEST_BREAKING;
+        requireCrouchToBreak = DEFAULT_REQUIRE_CROUCH_TO_BREAK;
+        crouchBreakMs = DEFAULT_CROUCH_BREAK_SECONDS * 1000L;
         useCron = false;
         cronExpression = null;
+    }
+
+    private long parseCrouchBreakMs(String value) {
+        try {
+            long seconds = Long.parseLong(value);
+            if (seconds < 0) {
+                throw new IllegalArgumentException(CONFIG_CROUCH_BREAK_SECONDS_KEY + " must be 0 or greater");
+            }
+            return seconds * 1000L;
+        } catch (RuntimeException e) {
+            LootRestock.LOGGER.warn("Invalid '{}' value '{}'. Using default: {} seconds",
+                    CONFIG_CROUCH_BREAK_SECONDS_KEY, value, DEFAULT_CROUCH_BREAK_SECONDS);
+            return DEFAULT_CROUCH_BREAK_SECONDS * 1000L;
+        }
     }
 
     /**
@@ -295,6 +334,14 @@ public class ModConfig {
      */
     public ChestBreakingPermission getChestBreakingPermission() {
         return chestBreakingPermission;
+    }
+
+    public boolean requireCrouchToBreak() {
+        return requireCrouchToBreak;
+    }
+
+    public long getCrouchBreakMs() {
+        return crouchBreakMs;
     }
 
     /**

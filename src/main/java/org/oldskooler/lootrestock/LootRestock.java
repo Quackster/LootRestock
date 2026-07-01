@@ -3,15 +3,18 @@ package org.oldskooler.lootrestock;
  import net.fabricmc.api.ModInitializer;
  import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
  import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+ import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
  import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
  import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
  import net.fabricmc.fabric.api.event.player.UseBlockCallback;
  import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.permissions.Permissions;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BarrelBlock;
@@ -26,6 +29,10 @@ import org.oldskooler.lootrestock.config.ModConfig;
  import org.oldskooler.lootrestock.handler.ChestResetHandler;
  import org.slf4j.Logger;
  import org.slf4j.LoggerFactory;
+
+ import java.util.HashMap;
+ import java.util.Map;
+ import java.util.UUID;
 
  /**
  * LootRestock is a Fabric mod that tracks and resets lootable chests
@@ -49,6 +56,7 @@ public class LootRestock implements ModInitializer {
     private ChestResetHandler resetHandler;
 
     private long tickCounter = 0;
+    private final Map<BreakAttemptKey, Long> protectedBreakAttempts = new HashMap<>();
 
     @Override
     public void onInitialize() {
@@ -70,6 +78,9 @@ public class LootRestock implements ModInitializer {
             if (!world.isClientSide() && hitResult.getType() == HitResult.Type.BLOCK) {
                 BlockPos pos = hitResult.getBlockPos();
                 registerBlockInteraction(world, pos);
+                if (isRestockingContainer(world, pos)) {
+                    sendActionBar(player, getRestockNotice());
+                }
             }
             return InteractionResult.PASS;
         });
@@ -78,30 +89,68 @@ public class LootRestock implements ModInitializer {
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (!world.isClientSide()) {
                 registerEntityInteraction(world, entity);
+                if (isRestockingMinecart(world, entity)) {
+                    sendActionBar(player, getRestockNotice());
+                }
             }
+            return InteractionResult.PASS;
+        });
+
+        // Register block attack callback to start the longer crouch-break timer.
+        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
+            if (!world.isClientSide() && isRestockingContainer(world, pos)) {
+                BreakDecision decision = getBreakDecision(player);
+                if (!decision.canBreak()) {
+                    protectedBreakAttempts.remove(BreakAttemptKey.block(player, world, pos));
+                    sendActionBar(player, decision.message());
+                    return InteractionResult.FAIL;
+                }
+
+                BreakAttemptKey key = BreakAttemptKey.block(player, world, pos);
+                protectedBreakAttempts.putIfAbsent(key, System.currentTimeMillis());
+
+                if (config.requireCrouchToBreak() && config.getCrouchBreakMs() > 0) {
+                    sendActionBar(player, "Keep crouching to remove this restocking chest.");
+                }
+            }
+
             return InteractionResult.PASS;
         });
 
         // Register block destroy interaction callback
         PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> {
-            if (!world.isClientSide() && blockEntity instanceof RandomizableContainerBlockEntity chestBlockEntity) {
+            if (!world.isClientSide() && isRestockingContainer(world, pos, blockEntity)) {
                 boolean isTracked = this.dataManager.isTracked(world, pos);
-                
-                if (isTracked || chestBlockEntity.getLootTable() != null) {
-                    // Add it to tracked list if not already
-                    if (!isTracked) {
-                        registerBlockInteraction(world, pos);
-                    }
 
-                    // Drop the inventory contents naturally
-                    Containers.dropContents(world, pos, chestBlockEntity);
+                if (!isTracked) {
+                    registerBlockInteraction(world, pos);
+                }
 
-                    // Prevent from actually breaking
+                BreakDecision decision = getBreakDecision(player);
+                if (!decision.canBreak()) {
+                    protectedBreakAttempts.remove(BreakAttemptKey.block(player, world, pos));
+                    sendActionBar(player, decision.message());
                     return false;
                 }
+
+                BreakAttemptKey key = BreakAttemptKey.block(player, world, pos);
+                long startedAt = protectedBreakAttempts.computeIfAbsent(key, ignored -> System.currentTimeMillis());
+                long elapsedMs = System.currentTimeMillis() - startedAt;
+                if (config.requireCrouchToBreak() && elapsedMs < config.getCrouchBreakMs()) {
+                    long remainingSeconds = Math.max(1L, (config.getCrouchBreakMs() - elapsedMs + 999L) / 1000L);
+                    sendActionBar(player, "Keep crouching for " + remainingSeconds + "s to remove this restocking chest.");
+                    return false;
+                }
+
+                return true;
             }
 
             return true;
+        });
+
+        PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
+            protectedBreakAttempts.remove(BreakAttemptKey.block(player, world, pos));
+            dataManager.remove(ChestDataManager.createChestKey(world, pos));
         });
 
         // Register entity destroy interaction callback
@@ -115,11 +164,11 @@ public class LootRestock implements ModInitializer {
                         registerEntityInteraction(world, entity);
                     }
 
-                    // Drop the inventory contents naturally
-                    Containers.dropContents(world, chestMinecart.blockPosition(), chestMinecart.getItemStacks());
-                    
-                    // Prevent from actually breaking
-                    return InteractionResult.FAIL;
+                    BreakDecision decision = getBreakDecision(player);
+                    if (!decision.canBreak()) {
+                        sendActionBar(player, decision.message());
+                        return InteractionResult.FAIL;
+                    }
                 }
             }
 
@@ -168,6 +217,66 @@ public class LootRestock implements ModInitializer {
 
     private void onServerStop(MinecraftServer server) {
         LOGGER.info("Saving {} tracked chests", dataManager.getTrackedChestCount());
+        protectedBreakAttempts.clear();
         dataManager.save();
+    }
+
+    private boolean isRestockingContainer(Level world, BlockPos pos) {
+        return isRestockingContainer(world, pos, world.getBlockEntity(pos));
+    }
+
+    private boolean isRestockingContainer(Level world, BlockPos pos, BlockEntity blockEntity) {
+        if (!(blockEntity instanceof RandomizableContainerBlockEntity chestBlockEntity)) {
+            return false;
+        }
+
+        return dataManager.isTracked(world, pos) || chestBlockEntity.getLootTable() != null;
+    }
+
+    private boolean isRestockingMinecart(Level world, Entity entity) {
+        return entity instanceof MinecartChest chestMinecart
+                && (dataManager.isEntityTracked(world, entity.getStringUUID())
+                || chestMinecart.getContainerLootTable() != null);
+    }
+
+    private BreakDecision getBreakDecision(Player player) {
+        if (!hasChestBreakPermission(player)) {
+            return new BreakDecision(false, "This restocking chest is protected.");
+        }
+
+        if (config.requireCrouchToBreak() && !player.isShiftKeyDown()) {
+            return new BreakDecision(false, "Loot chest restocks. Sneak and hold to remove it.");
+        }
+
+        return new BreakDecision(true, "");
+    }
+
+    private boolean hasChestBreakPermission(Player player) {
+        return switch (config.getChestBreakingPermission()) {
+            case ANYONE -> true;
+            case OP_ONLY -> player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+            case NO_ONE -> false;
+        };
+    }
+
+    private String getRestockNotice() {
+        if (config.requireCrouchToBreak()) {
+            return "Loot chest restocks. Please leave it unless needed; sneak + hold to remove.";
+        }
+
+        return "Loot chest restocks. Please leave it in place unless you need to remove it.";
+    }
+
+    private void sendActionBar(Player player, String message) {
+        player.sendOverlayMessage(Component.literal(message));
+    }
+
+    private record BreakDecision(boolean canBreak, String message) {
+    }
+
+    private record BreakAttemptKey(UUID playerUuid, String chestKey) {
+        private static BreakAttemptKey block(Player player, Level world, BlockPos pos) {
+            return new BreakAttemptKey(player.getUUID(), ChestDataManager.createChestKey(world, pos));
+        }
     }
 }
