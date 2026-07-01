@@ -84,6 +84,9 @@ public class LootRestock implements ModInitializer {
     private long tickCounter = 0;
 
     private Map<String, ChestData> trackedChests = new HashMap<>();
+    private final Queue<String> pendingResetKeys = new ArrayDeque<>();
+    private final Set<String> queuedResetKeys = new HashSet<>();
+    private static final int MAX_RESETS_PER_TICK = 32;
     private MinecraftServer server;
     private Path dataFile;
 
@@ -119,6 +122,8 @@ public class LootRestock implements ModInitializer {
 
         ServerLifecycleEvents.SERVER_STARTED.register(this::onServerStart);
         ServerLifecycleEvents.SERVER_STOPPING.register(this::onServerStop);
+
+        ServerTickEvents.START_SERVER_TICK.register(server -> processPendingChestResets());
 
         // Schedule periodic reset task
         ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -292,7 +297,7 @@ public class LootRestock implements ModInitializer {
         if (server == null) return;
 
         long currentTime = System.currentTimeMillis();
-        int resetCount = 0;
+        int queuedResetCount = 0;
         boolean needsSave = false;
 
         Iterator<Map.Entry<String, ChestData>> iterator = trackedChests.entrySet().iterator();
@@ -328,11 +333,8 @@ public class LootRestock implements ModInitializer {
 
                 if ((!onlyResetWhenEmpty || entity.isEmpty()) &&
                         (currentTime - data.lastLootedTime) >= resetTimeMs) {
-                    if (resetChestEntity(entity, data)) {
-                        resetCount++;
-                        data.isEmpty = entity.isEmpty();
-                        data.lastLootedTime = currentTime;
-                        data.dirty = true;
+                    if (queueChestReset(entry.getKey())) {
+                        queuedResetCount++;
                     }
                 }
 
@@ -347,12 +349,113 @@ public class LootRestock implements ModInitializer {
 
                 if ((!onlyResetWhenEmpty || chest.isEmpty()) &&
                         (currentTime - data.lastLootedTime) >= resetTimeMs) {
-                    if (resetChest(data)) {
-                        resetCount++;
-                        data.isEmpty = chest.isEmpty();
-                        data.lastLootedTime = currentTime;
-                        data.dirty = true;
+                    if (queueChestReset(entry.getKey())) {
+                        queuedResetCount++;
                     }
+                }
+            }
+
+            if (data.dirty) {
+                needsSave = true;
+            }
+        }
+
+        if (needsSave) {
+            saveChestData();
+            for (ChestData data : trackedChests.values()) {
+                data.dirty = false;
+            }
+        }
+
+        if (queuedResetCount > 0) {
+            LOGGER.debug("Queued {} chests for reset", queuedResetCount);
+        }
+    }
+
+    private boolean queueChestReset(String chestKey) {
+        if (!queuedResetKeys.add(chestKey)) {
+            return false;
+        }
+
+        pendingResetKeys.add(chestKey);
+        return true;
+    }
+
+    private void processPendingChestResets() {
+        if (server == null) {
+            pendingResetKeys.clear();
+            queuedResetKeys.clear();
+            return;
+        }
+
+        if (pendingResetKeys.isEmpty()) {
+            return;
+        }
+
+        long currentTime = System.currentTimeMillis();
+        int processedCount = 0;
+        int resetCount = 0;
+        boolean needsSave = false;
+
+        while (processedCount < MAX_RESETS_PER_TICK && !pendingResetKeys.isEmpty()) {
+            processedCount++;
+
+            String chestKey = pendingResetKeys.poll();
+            queuedResetKeys.remove(chestKey);
+
+            ChestData data = trackedChests.get(chestKey);
+            if (data == null) {
+                continue;
+            }
+
+            ServerWorld world = data.getWorld(server);
+            if (world == null) {
+                LOGGER.info("Removing chest from tracking: world '{}' no longer exists", data.worldName);
+                trackedChests.remove(chestKey);
+                needsSave = true;
+                continue;
+            }
+
+            BlockPos pos = data.getBlockPos();
+            if (!world.isChunkLoaded(
+                    ChunkSectionPos.getSectionCoord(pos.getX()),
+                    ChunkSectionPos.getSectionCoord(pos.getZ()))) {
+                continue;
+            }
+
+            if (data.isEntityChest()) {
+                ChestMinecartEntity entity = getMinecartChestByUuid(world, data.entityUuid, data.getBlockPos());
+                if (entity == null) {
+                    LOGGER.info("Removing tracked entity chest: not found {}", data.entityUuid);
+                    trackedChests.remove(chestKey);
+                    needsSave = true;
+                    continue;
+                }
+
+                if ((!onlyResetWhenEmpty || entity.isEmpty()) &&
+                        (currentTime - data.lastLootedTime) >= resetTimeMs &&
+                        resetChestEntity(entity, data)) {
+                    resetCount++;
+                    data.isEmpty = entity.isEmpty();
+                    data.lastLootedTime = currentTime;
+                    data.dirty = true;
+                }
+            } else {
+                BlockEntity blockEntity = world.getBlockEntity(pos);
+                if (!(blockEntity instanceof LootableContainerBlockEntity chest)) {
+                    LOGGER.info("Removing chest from tracking: block at {} is no longer a lootable container", pos);
+                    trackedChests.remove(chestKey);
+                    needsSave = true;
+                    continue;
+                }
+
+                if ((!onlyResetWhenEmpty || chest.isEmpty()) &&
+                        (currentTime - data.lastLootedTime) >= resetTimeMs &&
+                        resetChest(data)) {
+                    resetCount++;
+                    data.isEmpty = chest.isEmpty();
+                    data.lastLootedTime = currentTime;
+                    data.dirty = true;
                 }
             }
 
