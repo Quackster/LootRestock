@@ -171,7 +171,7 @@ public class ChestResetHandler {
 
         int removedPlayerCount = removeExpiredVaultPlayers(trackedRewardedPlayers, rewardedPlayers, currentTime);
         if (removedPlayerCount > 0) {
-            ((VaultServerDataAccessor) serverData).markChanged();
+            ((VaultServerDataAccessor) serverData).invokeMarkChanged();
             vault.setChanged();
 
             resetCount.incrementAndGet();

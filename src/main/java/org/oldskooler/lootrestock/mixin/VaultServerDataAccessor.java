@@ -14,5 +14,5 @@ public interface VaultServerDataAccessor {
     Set<UUID> getRewardedPlayers();
 
     @Invoker("markChanged")
-    void markChanged();
+    void invokeMarkChanged();
 }
