@@ -16,6 +16,7 @@ CurseForge: https://curseforge.com/minecraft/mc-mods/lootrestock
 - Resets chest contents based on original loot tables only when chunks are loaded
 - Optionally respawns items removed from item frames, such as Elytras in End Cities
 - Optionally lets trial chamber vaults reward the same player again after a separate vault reset interval
+- Optionally gives players who cannot break loot containers the container item whenever they roll its loot
 - **Performance-optimized**: Chest resets are processed only when players are nearby and chunks are active
 - Configurable cooldown period using simple time units (e.g. `7 days`, `12 hours`, `30 minutes`)
 - Persists data across server restarts
@@ -43,6 +44,7 @@ include_item_frames=false
 include_vaults=false
 allow_chest_breaking=op_only
 allow_item_frame_breaking=op_only
+drop_container_on_unpack=false
 ```
 
 - `reset_time_value`: Number of time units before a chest is eligible for reset
@@ -59,6 +61,9 @@ allow_item_frame_breaking=op_only
 - `include_vaults`: Whether trial chamber vaults should become reusable by the same player after the vault reset interval (default value: `false`)
 - `allow_chest_breaking`: Who can break tracked loot containers and chest minecarts: `op_only`, `anyone`, or `no_one` (default value: `op_only`)
 - `allow_item_frame_breaking`: Who can break tracked item frames and their supporting blocks: `op_only`, `anyone`, or `no_one` (default value: `op_only`)
+- `drop_container_on_unpack`: Whether players who cannot break loot containers receive a copy of the item when they roll its loot table, as if they had broken it (default value: `false`)
+  - Drops a chest, barrel, chest minecart or chest boat to match the container; double chests drop two chests
+  - Repeats each time the container restocks and is looted again
 
 ## Data Persistence
 

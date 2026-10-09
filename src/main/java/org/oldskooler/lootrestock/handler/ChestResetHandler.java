@@ -8,7 +8,8 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.decoration.ItemFrame;
-import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.vehicle.ContainerEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -112,20 +113,20 @@ public class ChestResetHandler {
 
     private boolean processEntityChest(ChestData data, ServerLevel world, long currentTime,
                                        Iterator<Map.Entry<String, ChestData>> iterator, AtomicInteger resetCount) {
-        MinecartChest entity = EntitySearchUtil.findMinecartChestByUuid(
+        Entity entity = EntitySearchUtil.findContainerEntityByUuid(
                 world, data.getEntityUuid(), data.getBlockPos()
         );
 
-        if (entity == null) {
+        if (!(entity instanceof ContainerEntity chest)) {
             LootRestock.LOGGER.info("Removing tracked entity chest: not found {}", data.getEntityUuid());
             iterator.remove();
             return true;
         }
 
-        if (shouldReset(entity.isEmpty(), currentTime, data.getLastLootedTime())) {
-            if (resetChestEntity(entity, data)) {
+        if (shouldReset(chest.isEmpty(), currentTime, data.getLastLootedTime())) {
+            if (resetChestEntity(entity, chest, data)) {
                 resetCount.incrementAndGet();
-                data.setEmpty(entity.isEmpty());
+                data.setEmpty(chest.isEmpty());
                 data.setLastLootedTime(currentTime);
                 data.setDirty(true);
             }
@@ -345,28 +346,27 @@ public class ChestResetHandler {
     }
 
     /**
-     * Resets the contents of a chest minecart using its stored loot table.
+     * Resets the contents of a chest minecart or chest boat using its stored loot table.
      * This clears its inventory and regenerates loot with a new random seed.
      *
-     * @param chest the ChestMinecartEntity to reset
-     * @param data  the stored chest data, including loot table info
+     * @param entity the chest minecart or chest boat to reset
+     * @param chest  the same entity viewed as a container
+     * @param data   the stored chest data, including loot table info
      * @return true if the chest was successfully reset, false otherwise
      */
-    private boolean resetChestEntity(MinecartChest chest, ChestData data) {
+    private boolean resetChestEntity(Entity entity, ContainerEntity chest, ChestData data) {
         try {
             chest.clearContent();
-            chest.setLootTable(
-                    ResourceKey.create(Registries.LOOT_TABLE, data.getLootTableIdentifier()),
-                    chest.level().getRandom().nextLong()
-            );
+            chest.setContainerLootTable(ResourceKey.create(Registries.LOOT_TABLE, data.getLootTableIdentifier()));
+            chest.setContainerLootTableSeed(entity.level().getRandom().nextLong());
             chest.unpackChestVehicleLootTable(null);
             chest.setChanged();
 
-            LootRestock.LOGGER.info("Reset chest minecart at {} in world {}",
-                    chest.blockPosition(), data.getWorldName());
+            LootRestock.LOGGER.info("Reset chest vehicle at {} in world {}",
+                    entity.blockPosition(), data.getWorldName());
             return true;
         } catch (Exception e) {
-            LootRestock.LOGGER.error("Failed to reset chest minecart: {}", e.getMessage());
+            LootRestock.LOGGER.error("Failed to reset chest vehicle: {}", e.getMessage());
             return false;
         }
     }
