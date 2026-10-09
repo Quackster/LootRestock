@@ -93,7 +93,8 @@ public class LootRestock implements ModInitializer {
                 return false;
             }
 
-            if (!world.isClientSide() && blockEntity instanceof RandomizableContainerBlockEntity chestBlockEntity) {
+            if (!world.isClientSide() && isLootContainerBlock(state)
+                    && blockEntity instanceof RandomizableContainerBlockEntity chestBlockEntity) {
                 boolean isTracked = this.dataManager.isTracked(world, pos);
                 
                 if (isTracked || chestBlockEntity.getLootTable() != null) {
@@ -196,8 +197,7 @@ public class LootRestock implements ModInitializer {
     private void registerBlockInteraction(Level world, BlockPos pos) {
         BlockState state = world.getBlockState(pos);
 
-        if (state.getBlock() instanceof ChestBlock ||
-                (config.includeBarrels() && state.getBlock() instanceof BarrelBlock)) {
+        if (isLootContainerBlock(state)) {
             BlockEntity blockEntity = world.getBlockEntity(pos);
             if (blockEntity instanceof RandomizableContainerBlockEntity) {
                 interactionHandler.handleChestInteraction(
@@ -210,6 +210,11 @@ public class LootRestock implements ModInitializer {
                 interactionHandler.handleVaultInteraction(world, pos, vault);
             }
         }
+    }
+
+    private boolean isLootContainerBlock(BlockState state) {
+        return state.getBlock() instanceof ChestBlock ||
+                (config.includeBarrels() && state.getBlock() instanceof BarrelBlock);
     }
 
     private boolean isProtectedItemFrameSupport(Level world, Player player, BlockPos pos) {
