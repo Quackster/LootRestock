@@ -2,7 +2,9 @@ package org.oldskooler.lootrestock.util;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.entity.vehicle.boat.AbstractChestBoat;
 import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
@@ -17,36 +19,46 @@ public class EntitySearchUtil {
     private static final int DEFAULT_SEARCH_DISTANCE = 2;
 
     /**
-     * Attempts to locate a MinecartChest in the given world by its UUID.
-     * Searches within a bounding box around the given block position to limit the area.
+     * Returns whether the entity is a lootable container entity, such as a chest minecart or chest boat.
      *
-     * @param world the server world to search in
-     * @param uuidStr the UUID string of the chest minecart to find
-     * @param pos the position around which to search
-     * @return the matching MinecartChest, or null if not found or UUID is invalid
+     * @param entity the entity to check
+     * @return true if the entity is a chest minecart or chest boat
      */
-    public static MinecartChest findMinecartChestByUuid(ServerLevel world, String uuidStr, BlockPos pos) {
-        return findMinecartChestByUuid(world, uuidStr, pos, DEFAULT_SEARCH_DISTANCE);
+    public static boolean isLootContainerEntity(Entity entity) {
+        return entity instanceof MinecartChest || entity instanceof AbstractChestBoat;
     }
 
     /**
-     * Attempts to locate a MinecartChest in the given world by its UUID.
+     * Attempts to locate a chest minecart or chest boat in the given world by its UUID.
      * Searches within a bounding box around the given block position to limit the area.
      *
      * @param world the server world to search in
-     * @param uuidStr the UUID string of the chest minecart to find
+     * @param uuidStr the UUID string of the container entity to find
+     * @param pos the position around which to search
+     * @return the matching container entity, or null if not found or UUID is invalid
+     */
+    public static Entity findContainerEntityByUuid(ServerLevel world, String uuidStr, BlockPos pos) {
+        return findContainerEntityByUuid(world, uuidStr, pos, DEFAULT_SEARCH_DISTANCE);
+    }
+
+    /**
+     * Attempts to locate a chest minecart or chest boat in the given world by its UUID.
+     * Searches within a bounding box around the given block position to limit the area.
+     *
+     * @param world the server world to search in
+     * @param uuidStr the UUID string of the container entity to find
      * @param pos the position around which to search
      * @param searchDistance the distance in blocks to search around the position
-     * @return the matching MinecartChest, or null if not found or UUID is invalid
+     * @return the matching container entity, or null if not found or UUID is invalid
      */
-    public static MinecartChest findMinecartChestByUuid(ServerLevel world, String uuidStr,
-                                                        BlockPos pos, int searchDistance) {
+    public static Entity findContainerEntityByUuid(ServerLevel world, String uuidStr,
+                                                   BlockPos pos, int searchDistance) {
         try {
             AABB searchBox = new AABB(pos).inflate(searchDistance);
             UUID uuid = UUID.fromString(uuidStr);
 
-            return world.getEntitiesOfClass(MinecartChest.class, searchBox,
-                            entity -> entity.getUUID().equals(uuid))
+            return world.getEntitiesOfClass(Entity.class, searchBox,
+                            entity -> isLootContainerEntity(entity) && entity.getUUID().equals(uuid))
                     .stream()
                     .findFirst()
                     .orElse(null);

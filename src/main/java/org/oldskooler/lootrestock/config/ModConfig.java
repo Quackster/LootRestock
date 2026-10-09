@@ -25,6 +25,7 @@ import java.util.Properties;
  *   <li><b>include_item_frames</b>: true/false (default: false)</li>
  *   <li><b>allow_chest_breaking</b>: Who can break chests - "op_only", "anyone", or "no_one" (default: op_only)</li>
  *   <li><b>allow_item_frame_breaking</b>: Who can break tracked item frames - "op_only", "anyone", or "no_one" (default: op_only)</li>
+ *   <li><b>drop_container_on_unpack</b>: true/false (default: false)</li>
  * </ul>
  *
  * Notes:
@@ -43,6 +44,7 @@ public class ModConfig {
     private static final String CONFIG_INCLUDE_VAULTS_KEY = "include_vaults";
     private static final String CONFIG_ALLOW_CHEST_BREAKING_KEY = "allow_chest_breaking";
     private static final String CONFIG_ALLOW_ITEM_FRAME_BREAKING_KEY = "allow_item_frame_breaking";
+    private static final String CONFIG_DROP_CONTAINER_ON_UNPACK_KEY = "drop_container_on_unpack";
     private static final String CONFIG_VAULT_TIME_VALUE_KEY = "vault_reset_time_value";
     private static final String CONFIG_VAULT_TIME_UNIT_KEY = "vault_reset_time_unit";
     private static final String CONFIG_VAULT_CRON_KEY = "vault_reset_cron";
@@ -53,12 +55,14 @@ public class ModConfig {
     private static final boolean DEFAULT_INCLUDE_BARRELS = false;
     private static final boolean DEFAULT_INCLUDE_ITEM_FRAMES = false;
     private static final boolean DEFAULT_INCLUDE_VAULTS = false;
+    private static final boolean DEFAULT_DROP_CONTAINER_ON_UNPACK = false;
     private static final ChestBreakingPermission DEFAULT_CHEST_BREAKING = ChestBreakingPermission.OP_ONLY;
 
     private boolean includeBarrels;
     private boolean includeItemFrames;
     private boolean includeVaults;
     private boolean onlyResetWhenEmpty;
+    private boolean dropContainerOnUnpack;
     private ChestBreakingPermission chestBreakingPermission;
     private ChestBreakingPermission itemFrameBreakingPermission;
 
@@ -232,6 +236,10 @@ public class ModConfig {
                     config.getProperty(CONFIG_ALLOW_ITEM_FRAME_BREAKING_KEY,
                             chestBreakingPermission.toString())
             );
+            dropContainerOnUnpack = Boolean.parseBoolean(
+                    config.getProperty(CONFIG_DROP_CONTAINER_ON_UNPACK_KEY,
+                            String.valueOf(DEFAULT_DROP_CONTAINER_ON_UNPACK))
+            );
 
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_TIME_VALUE_KEY,
                     config.getProperty(CONFIG_TIME_VALUE_KEY));
@@ -251,6 +259,7 @@ public class ModConfig {
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_INCLUDE_VAULTS_KEY, includeVaults);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ALLOW_CHEST_BREAKING_KEY, chestBreakingPermission);
             LootRestock.LOGGER.info("'{}' = {}", CONFIG_ALLOW_ITEM_FRAME_BREAKING_KEY, itemFrameBreakingPermission);
+            LootRestock.LOGGER.info("'{}' = {}", CONFIG_DROP_CONTAINER_ON_UNPACK_KEY, dropContainerOnUnpack);
         }
     }
 
@@ -331,6 +340,12 @@ public class ModConfig {
             sb.append("#   anyone   - Anyone can break tracked item frames\n");
             sb.append("#   no_one   - No one can break tracked item frames (fully protected)\n");
             sb.append(CONFIG_ALLOW_ITEM_FRAME_BREAKING_KEY).append("=").append(DEFAULT_CHEST_BREAKING.toString()).append("\n");
+            sb.append("# \n");
+            sb.append("# Should players who cannot break loot containers also receive the container item?\n");
+            sb.append("# If true, rolling a container's loot table also drops a copy of the container item into the world, as if it had been broken\n");
+            sb.append("# e.g. a chest, barrel, dispenser, dropper, chest minecart or chest boat. This repeats each time the container restocks\n");
+            sb.append("# If false, no additional item is dropped\n");
+            sb.append(CONFIG_DROP_CONTAINER_ON_UNPACK_KEY).append("=").append(DEFAULT_DROP_CONTAINER_ON_UNPACK).append("\n");
 
             out.write(sb.toString().getBytes());
         }
@@ -341,6 +356,7 @@ public class ModConfig {
         includeVaults = DEFAULT_INCLUDE_VAULTS;
         chestBreakingPermission = DEFAULT_CHEST_BREAKING;
         itemFrameBreakingPermission = DEFAULT_CHEST_BREAKING;
+        dropContainerOnUnpack = DEFAULT_DROP_CONTAINER_ON_UNPACK;
         useCron = false;
         cronExpression = null;
         cronParser = null;
@@ -429,6 +445,10 @@ public class ModConfig {
 
     public boolean onlyResetWhenEmpty() {
         return onlyResetWhenEmpty;
+    }
+
+    public boolean dropContainerOnUnpack() {
+        return dropContainerOnUnpack;
     }
 
     /**

@@ -14,11 +14,12 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
+import net.minecraft.world.entity.vehicle.ContainerEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.DoubleBlockCombiner;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.block.entity.vault.VaultBlockEntity;
@@ -28,6 +29,7 @@ import org.oldskooler.lootrestock.config.ModConfig;
 import org.oldskooler.lootrestock.data.ChestDataManager;
 import org.oldskooler.lootrestock.handler.ChestInteractionHandler;
 import org.oldskooler.lootrestock.handler.ChestResetHandler;
+import org.oldskooler.lootrestock.handler.ContainerDropHandler;
 import org.oldskooler.lootrestock.util.EntitySearchUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +43,7 @@ import org.slf4j.LoggerFactory;
  *   <li>Tracks interactions with chests (and optionally barrels) that use loot tables</li>
  *   <li>Automatically resets their loot after a configurable cooldown</li>
  *   <li>Optionally only resets when the chest is empty</li>
+ *   <li>Optionally gives the container item to players who roll its loot but cannot break it</li>
  *   <li>Removes chests from tracking if the world is deleted or the block is no longer a lootable container</li>
  * </ul>
  */
@@ -52,6 +55,7 @@ public class LootRestock implements ModInitializer {
     private ChestDataManager dataManager;
     private ChestInteractionHandler interactionHandler;
     private ChestResetHandler resetHandler;
+    private ContainerDropHandler dropHandler;
 
     private long tickCounter = 0;
 
@@ -65,6 +69,7 @@ public class LootRestock implements ModInitializer {
         dataManager = new ChestDataManager();
         interactionHandler = new ChestInteractionHandler(dataManager);
         resetHandler = new ChestResetHandler(dataManager, config);
+        dropHandler = new ContainerDropHandler();
 
         registerEventHandlers();
     }
@@ -74,6 +79,7 @@ public class LootRestock implements ModInitializer {
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (!world.isClientSide() && hitResult.getType() == HitResult.Type.BLOCK) {
                 BlockPos pos = hitResult.getBlockPos();
+                registerBlockUnpack(world, player, pos);
                 registerBlockInteraction(world, pos);
             }
             return InteractionResult.PASS;
@@ -82,6 +88,7 @@ public class LootRestock implements ModInitializer {
         // Register entity interaction callback
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (!world.isClientSide()) {
+                registerEntityUnpack(world, player, entity);
                 registerEntityInteraction(world, entity);
             }
             return InteractionResult.PASS;
@@ -100,6 +107,8 @@ public class LootRestock implements ModInitializer {
                     if (canBreak(player, config.getChestBreakingPermission())) {
                         return true;
                     }
+
+                    registerBlockUnpack(world, player, pos);
 
                     // Add it to tracked list if not already
                     if (!isTracked) {
@@ -120,10 +129,10 @@ public class LootRestock implements ModInitializer {
         // Register entity destroy interaction callback
         AttackEntityCallback.EVENT.register((player, world, hand, entity, result) -> {
             if (!world.isClientSide()) {
-                if (entity instanceof MinecartChest chestMinecart) {
+                if (EntitySearchUtil.isLootContainerEntity(entity) && entity instanceof ContainerEntity chestEntity) {
                     boolean isEntityTracked = this.dataManager.isEntityTracked(world, entity.getStringUUID());
 
-                    if (isEntityTracked || chestMinecart.getContainerLootTable() != null) {
+                    if (isEntityTracked || chestEntity.getContainerLootTable() != null) {
                         if (canBreak(player, config.getChestBreakingPermission())) {
                             return InteractionResult.PASS;
                         }
@@ -134,7 +143,7 @@ public class LootRestock implements ModInitializer {
                         }
 
                         // Drop the inventory contents naturally
-                        Containers.dropContents(world, chestMinecart.blockPosition(), chestMinecart.getItemStacks());
+                        Containers.dropContents(world, entity.blockPosition(), chestEntity.getItemStacks());
 
                         // Prevent from actually breaking
                         return InteractionResult.FAIL;
@@ -173,6 +182,8 @@ public class LootRestock implements ModInitializer {
 
         // Periodic reset task
         ServerTickEvents.END_SERVER_TICK.register(server -> {
+            dropHandler.processPendingUnpacks();
+
             tickCounter++;
             if (tickCounter >= 20) { // 20 ticks = 1 second
                 tickCounter = 0;
@@ -182,8 +193,8 @@ public class LootRestock implements ModInitializer {
     }
 
     private void registerEntityInteraction(Level world, Entity entity) {
-        if (entity instanceof MinecartChest chestMinecart) {
-            interactionHandler.handleMinecartChestInteraction(world, chestMinecart);
+        if (EntitySearchUtil.isLootContainerEntity(entity)) {
+            interactionHandler.handleContainerEntityInteraction(world, entity);
         } else if (config.includeItemFrames() && entity instanceof ItemFrame itemFrame) {
             interactionHandler.handleItemFrameInteraction(world, itemFrame);
         }
@@ -209,6 +220,34 @@ public class LootRestock implements ModInitializer {
             if (blockEntity instanceof VaultBlockEntity vault) {
                 interactionHandler.handleVaultInteraction(world, pos, vault);
             }
+        }
+    }
+
+    private void registerBlockUnpack(Level world, Player player, BlockPos pos) {
+        if (!config.dropContainerOnUnpack() || canBreak(player, config.getChestBreakingPermission())) {
+            return;
+        }
+
+        BlockState state = world.getBlockState(pos);
+
+        if (state.getBlock() instanceof ChestBlock) {
+            // Opening either half of a double chest rolls both loot tables
+            dropHandler.queueBlockUnpack(world, pos);
+            if (ChestBlock.getBlockType(state) != DoubleBlockCombiner.BlockType.SINGLE) {
+                dropHandler.queueBlockUnpack(world, ChestBlock.getConnectedBlockPos(pos, state));
+            }
+        } else if (config.includeBarrels() && state.getBlock() instanceof BarrelBlock) {
+            dropHandler.queueBlockUnpack(world, pos);
+        }
+    }
+
+    private void registerEntityUnpack(Level world, Player player, Entity entity) {
+        if (!config.dropContainerOnUnpack() || canBreak(player, config.getChestBreakingPermission())) {
+            return;
+        }
+
+        if (EntitySearchUtil.isLootContainerEntity(entity)) {
+            dropHandler.queueEntityUnpack(world, entity);
         }
     }
 

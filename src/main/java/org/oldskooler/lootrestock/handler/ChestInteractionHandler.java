@@ -2,8 +2,9 @@ package org.oldskooler.lootrestock.handler;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ItemFrame;
-import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
+import net.minecraft.world.entity.vehicle.ContainerEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
@@ -50,30 +51,30 @@ public class ChestInteractionHandler {
     }
 
     /**
-     * Handles interaction with a Chest Minecart entity.
+     * Handles interaction with a chest minecart or chest boat entity.
      * If the entity has a loot table, it is added to the tracked chest map
      * and its current state is recorded. The reset timer starts from the time
      * of interaction.
      *
-     * @param world the world the chest minecart is in
-     * @param chest the ChestMinecartEntity being interacted with
+     * @param world the world the container entity is in
+     * @param entity the chest minecart or chest boat being interacted with
      */
-    public void handleMinecartChestInteraction(Level world, MinecartChest chest) {
-        if (chest.getContainerLootTable() == null) {
+    public void handleContainerEntityInteraction(Level world, Entity entity) {
+        if (!(entity instanceof ContainerEntity chest) || chest.getContainerLootTable() == null) {
             return;
         }
 
-        String chestKey = ChestDataManager.createEntityChestKey(world, chest.getStringUUID());
+        String chestKey = ChestDataManager.createEntityChestKey(world, entity.getStringUUID());
         ChestData data = dataManager.getOrCreate(chestKey);
 
         data.setType(ChestData.TYPE_ENTITY_CHEST);
         data.setWorldName(world.dimension().identifier().toString());
-        data.setEntityUuid(chest.getStringUUID());
+        data.setEntityUuid(entity.getStringUUID());
         data.setLootTableId(chest.getContainerLootTable().identifier().toString());
         data.setLootSeed(chest.getContainerLootTableSeed());
-        data.setX(chest.blockPosition().getX());
-        data.setY(chest.blockPosition().getY());
-        data.setZ(chest.blockPosition().getZ());
+        data.setX(entity.blockPosition().getX());
+        data.setY(entity.blockPosition().getY());
+        data.setZ(entity.blockPosition().getZ());
         data.setEmpty(chest.isEmpty());
         data.setDirty(true);
     }
